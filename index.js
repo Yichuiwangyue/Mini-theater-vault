@@ -1,7 +1,7 @@
 // ============================================================
 // 小剧场收藏夹 Mini Theater Vault
 // 一个 SillyTavern 第三方扩展：本地保存"小剧场"文本，
-// 支持作者标注、分类/标签/搜索/排序/折叠/内存查看，
+// 支持作者标注、分类/标签/搜索/排序/折叠/内存查看/自定义阈值，
 // 并可一键插入或发送到聊天框。
 // ============================================================
 
@@ -18,12 +18,17 @@ let collapsedCategories = new Set();
 
 function getSettings() {
     if (!extension_settings[MODULE_NAME]) {
-        extension_settings[MODULE_NAME] = { entries: [] };
+        extension_settings[MODULE_NAME] = {
+            entries: [],
+            warnThreshold: 200,    // 默认黄色警告：200 KB
+            dangerThreshold: 1024, // 默认红色警告：1 MB
+        };
     }
-    if (!Array.isArray(extension_settings[MODULE_NAME].entries)) {
-        extension_settings[MODULE_NAME].entries = [];
-    }
-    return extension_settings[MODULE_NAME];
+    const s = extension_settings[MODULE_NAME];
+    if (!Array.isArray(s.entries)) s.entries = [];
+    if (typeof s.warnThreshold !== "number") s.warnThreshold = 200;
+    if (typeof s.dangerThreshold !== "number") s.dangerThreshold = 1024;
+    return s;
 }
 
 function persist() {
@@ -104,7 +109,46 @@ function injectStyles() {
             color: #c33;
         }
         .mt-memory-bar .mt-memory-right {
-            opacity: 0.75;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0.85;
+            font-size: 0.95em;
+        }
+        #mt_memory_settings_btn {
+            padding: 1px 5px;
+            font-size: 0.85em;
+            line-height: 1;
+            border-radius: 4px;
+        }
+
+        /* 阈值设置面板 */
+        .mt-memory-settings {
+            display: none;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            padding: 6px 10px;
+            font-size: 0.8em;
+            background: rgba(0,0,0,0.04);
+            border-radius: 0 0 6px 6px;
+            margin-top: -2px;
+        }
+        .mt-memory-settings label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        .mt-memory-settings input[type="number"] {
+            width: 65px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            border: 1px solid rgba(0,0,0,0.15);
+            font-size: 0.95em;
+        }
+        .mt-memory-settings .menu_button {
+            padding: 2px 10px;
             font-size: 0.9em;
         }
 
@@ -181,7 +225,15 @@ function panelHtml() {
         </div>
         <div id="mt_memory_bar" class="mt-memory-bar">
             <span><i class="fa-solid fa-database"></i> <span id="mt_memory_text">计算中…</span></span>
-            <span class="mt-memory-right"><span id="mt_entry_count">0</span> 条小剧场</span>
+            <span class="mt-memory-right">
+                <span id="mt_entry_count">0</span> 条小剧场
+                <button id="mt_memory_settings_btn" class="menu_button" title="自定义警告阈值"><i class="fa-solid fa-gear"></i></button>
+            </span>
+        </div>
+        <div id="mt_memory_settings" class="mt-memory-settings">
+            <label>🟡 黄色警告 ≥ <input id="mt_warn_kb" type="number" min="1" value="200"> KB</label>
+            <label>🔴 红色警告 ≥ <input id="mt_danger_kb" type="number" min="1" value="1024"> KB</label>
+            <button id="mt_save_threshold" class="menu_button">保存</button>
         </div>
         <div id="mt_list" class="mt-list"></div>
         <input id="mt_import_file" type="file" accept="application/json" style="display:none;" />
@@ -241,8 +293,9 @@ function updateCategoryOptions() {
 function updateMemoryInfo() {
     const settings = getSettings();
     const count = settings.entries.length;
+    const warnThreshold = settings.warnThreshold;
+    const dangerThreshold = settings.dangerThreshold;
 
-    // 计算 entries 的 JSON 字节数
     const json = JSON.stringify(settings.entries);
     const bytes = new Blob([json]).size;
 
@@ -258,12 +311,12 @@ function updateMemoryInfo() {
     $("#mt_memory_text").text(`占用 ${sizeText}`);
     $("#mt_entry_count").text(count);
 
-    // 根据大小变色提醒（localStorage 通常上限约 5MB）
     const $bar = $("#mt_memory_bar");
     $bar.removeClass("warn danger");
-    if (bytes >= 1024 * 1024) {
+    const kb = bytes / 1024;
+    if (kb >= dangerThreshold) {
         $bar.addClass("danger");
-    } else if (bytes >= 200 * 1024) {
+    } else if (kb >= warnThreshold) {
         $bar.addClass("warn");
     }
 }
@@ -554,6 +607,36 @@ function bindEvents() {
             $group.addClass("collapsed");
             collapsedCategories.add(cat);
         }
+    });
+
+    // 内存阈值设置
+    $(document).on("click", "#mt_memory_settings_btn", () => {
+        const settings = getSettings();
+        $("#mt_warn_kb").val(settings.warnThreshold);
+        $("#mt_danger_kb").val(settings.dangerThreshold);
+        $("#mt_memory_settings").slideToggle(150);
+    });
+
+    $(document).on("click", "#mt_save_threshold", () => {
+        const settings = getSettings();
+        const warn = parseInt($("#mt_warn_kb").val(), 10);
+        const danger = parseInt($("#mt_danger_kb").val(), 10);
+
+        if (isNaN(warn) || isNaN(danger) || warn < 1 || danger < 1) {
+            toastr.warning("请输入有效的正整数");
+            return;
+        }
+        if (warn >= danger) {
+            toastr.warning("黄色阈值必须小于红色阈值");
+            return;
+        }
+
+        settings.warnThreshold = warn;
+        settings.dangerThreshold = danger;
+        persist();
+        updateMemoryInfo();
+        $("#mt_memory_settings").slideUp(150);
+        toastr.success("阈值设置已保存");
     });
 
     $(document).on("click", "#mt_export", exportEntries);

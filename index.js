@@ -72,6 +72,134 @@ function injectStyles() {
     const style = document.createElement("style");
     style.id = "mt_dynamic_styles";
     style.textContent = `
+
+        /* 遮罩层 */
+        .mt-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 9998;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        .mt-overlay.mt-show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* 主面板（右侧抽屉） */
+        .mt-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 440px;
+            max-width: 92vw;
+            background: var(--SmartThemeBlurTintColor, #f0f0f0);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            box-shadow: -4px 0 24px rgba(0,0,0,0.25);
+        }
+        .mt-panel.mt-show {
+            transform: translateX(0);
+        }
+
+        /* ============================================
+           编辑器弹窗 —— 完全展开，上下留边距
+           顶部往下留了 36px，底部也留了 36px
+           内部自动滚动，正文区域超大
+           ============================================ */
+        .mt-editor {
+            position: fixed;
+            top: 36px;              /* 往下移，不贴顶 */
+            bottom: 36px;           /* 底部也留白 */
+            left: 50%;
+            transform: translateX(-50%) scale(0.96);
+            width: 600px;
+            max-width: 94vw;
+            background: var(--SmartThemeBlurTintColor, #f0f0f0);
+            border-radius: 16px;
+            z-index: 10000;
+            box-shadow: 0 24px 70px rgba(0,0,0,0.45);
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            overflow: hidden;       /* 外层不滚动 */
+        }
+        .mt-editor.mt-show {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(-50%) scale(1);
+        }
+        .mt-editor-inner {
+            flex: 1;                /* 撑满剩余空间 */
+            overflow-y: auto;       /* 内部独立滚动 */
+            padding: 24px 28px;
+        }
+        .mt-editor-inner h3 {
+            margin: 0 0 12px 0;
+            font-size: 1.3em;
+        }
+        .mt-editor-inner label {
+            display: block;
+            margin-top: 12px;
+            margin-bottom: 4px;
+            font-size: 0.9em;
+            opacity: 0.85;
+        }
+        .mt-editor-inner input[type="text"],
+        .mt-editor-inner textarea,
+        .mt-editor-inner select {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(128,128,128,0.25);
+            background: rgba(0,0,0,0.04);
+            color: inherit;
+            font-family: inherit;
+            font-size: 0.95em;
+            box-sizing: border-box;
+        }
+        .mt-editor-inner textarea {
+            resize: vertical;
+            min-height: 160px;      /* 正文区域至少 160px */
+            line-height: 1.5;
+        }
+        .mt-editor-row {
+            display: flex;
+            gap: 14px;
+        }
+        .mt-editor-row > div {
+            flex: 1;
+        }
+        .mt-editor-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 18px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(128,128,128,0.15);
+        }
+
+        /* 列表滚动区 */
+        .mt-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px;
+        }
+        .mt-empty {
+            text-align: center;
+            padding: 40px 20px;
+            opacity: 0.5;
+            font-size: 0.95em;
+        }
+
         /* 工具栏 */
         .mt-toolbar {
             display: flex;

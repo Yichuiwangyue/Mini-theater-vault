@@ -1,7 +1,7 @@
 // ============================================================
 // 小剧场收藏夹 Mini Theater Vault
 // 一个 SillyTavern 第三方扩展：本地保存"小剧场"文本，
-// 支持作者标注、分类/标签/搜索/排序/折叠/内存查看/自定义阈值，
+// 支持作者标注、分类/标签/搜索/排序/折叠/内存查看/自定义阈值/批量删除，
 // 并可一键插入或发送到聊天框。
 // ============================================================
 
@@ -13,6 +13,8 @@ const DEFAULT_CATEGORIES = ["日常", "约会", "历史", "节日", "任务", "�
 
 let currentEditId = null;
 let collapsedCategories = new Set();
+let batchMode = false;
+let selectedIds = new Set();
 
 // ---------------- 数据层 ----------------
 
@@ -20,8 +22,8 @@ function getSettings() {
     if (!extension_settings[MODULE_NAME]) {
         extension_settings[MODULE_NAME] = {
             entries: [],
-            warnThreshold: 200,    // 默认黄色警告：200 KB
-            dangerThreshold: 1024, // 默认红色警告：1 MB
+            warnThreshold: 200,
+            dangerThreshold: 1024,
         };
     }
     const s = extension_settings[MODULE_NAME];
@@ -86,6 +88,27 @@ function injectStyles() {
             flex: 0 1 auto;
             min-width: 110px;
         }
+
+        /* 批量操作栏 */
+        .mt-batch-bar {
+            display: none;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            padding: 6px 8px;
+            margin-top: 6px;
+            background: rgba(0,0,0,0.04);
+            border-radius: 6px;
+        }
+        .mt-batch-bar.show { display: flex; }
+        .mt-batch-label {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            user-select: none;
+        }
+        #mt_batch_delete:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* 内存占用条 */
         .mt-memory-bar {
@@ -192,6 +215,22 @@ function injectStyles() {
             overflow: hidden;
             min-height: 0;
         }
+
+        /* 批量复选框 */
+        .mt-item { display: block; }
+        .mt-item.batch-mode { display: flex; gap: 8px; align-items: flex-start; }
+        .mt-item-check {
+            display: none;
+            flex-shrink: 0;
+            margin-top: 4px;
+            cursor: pointer;
+        }
+        .mt-item.batch-mode .mt-item-check { display: block; }
+        .mt-item-check input {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
     `;
     document.head.appendChild(style);
 }
@@ -205,6 +244,7 @@ function panelHtml() {
         <div class="mt-header">
             <span class="mt-title"><i class="fa-solid fa-masks-theater"></i> 小剧场收藏夹</span>
             <div class="mt-header-btns">
+                <button id="mt_batch" class="menu_button" title="批量选择"><i class="fa-solid fa-list-check"></i></button>
                 <button id="mt_add" class="menu_button" title="新增小剧场"><i class="fa-solid fa-plus"></i></button>
                 <button id="mt_export" class="menu_button" title="导出备份 JSON"><i class="fa-solid fa-download"></i></button>
                 <button id="mt_import" class="menu_button" title="导入备份 JSON"><i class="fa-solid fa-upload"></i></button>
@@ -222,6 +262,11 @@ function panelHtml() {
                 <option value="title_asc">名称 A-Z</option>
                 <option value="title_desc">名称 Z-A</option>
             </select>
+        </div>
+        <div id="mt_batch_bar" class="mt-batch-bar">
+            <label class="mt-batch-label"><input type="checkbox" id="mt_select_all"> 全选当前</label>
+            <button id="mt_batch_delete" class="menu_button" disabled><i class="fa-solid fa-trash"></i> 删除选中 (<span id="mt_selected_count">0</span>)</button>
+            <button id="mt_batch_cancel" class="menu_button">完成</button>
         </div>
         <div id="mt_memory_bar" class="mt-memory-bar">
             <span><i class="fa-solid fa-database"></i> <span id="mt_memory_text">计算中…</span></span>
@@ -321,25 +366,47 @@ function updateMemoryInfo() {
     }
 }
 
+function updateBatchBar() {
+    if (!batchMode) {
+        $("#mt_batch_bar").removeClass("show");
+        return;
+    }
+    $("#mt_batch_bar").addClass("show");
+    const count = selectedIds.size;
+    $("#mt_selected_count").text(count);
+    $("#mt_batch_delete").prop("disabled", count === 0);
+
+    const allCheckboxes = $(".mt-checkbox");
+    const allChecked = allCheckboxes.length > 0 && allCheckboxes.toArray().every(cb => $(cb).prop("checked"));
+    $("#mt_select_all").prop("checked", allChecked);
+}
+
 function renderEntryCard(entry) {
     const previewRaw = entry.content.slice(0, 120).replace(/\n/g, " ");
     const preview = escapeHtml(previewRaw);
     const tags = (entry.tags || []).map((t) => `<span class="mt-tag">#${escapeHtml(t)}</span>`).join(" ");
     const date = new Date(entry.updatedAt).toLocaleDateString();
+    const batchClass = batchMode ? "batch-mode" : "";
+    const checkbox = batchMode
+        ? `<label class="mt-item-check"><input type="checkbox" class="mt-checkbox" value="${entry.id}" ${selectedIds.has(entry.id) ? "checked" : ""}></label>`
+        : "";
     return `
-        <div class="mt-item" data-id="${entry.id}">
-            <div class="mt-item-head">
-                <strong>${escapeHtml(entry.title)}</strong>
-                <span class="mt-badge">${escapeHtml(entry.category || "未分类")}</span>
-            </div>
-            <div class="mt-item-meta">作者：${escapeHtml(entry.author || "匿名")} · ${date} ${tags}</div>
-            <div class="mt-item-preview">${preview}${entry.content.length > 120 ? "…" : ""}</div>
-            <div class="mt-item-actions">
-                <button class="menu_button mt-send" title="直接发送"><i class="fa-solid fa-paper-plane"></i> 发送</button>
-                <button class="menu_button mt-insert" title="插入到输入框"><i class="fa-solid fa-arrow-turn-down"></i> 插入</button>
-                <button class="menu_button mt-copy" title="复制到剪贴板"><i class="fa-solid fa-copy"></i></button>
-                <button class="menu_button mt-edit" title="编辑"><i class="fa-solid fa-pen"></i></button>
-                <button class="menu_button mt-delete" title="删除"><i class="fa-solid fa-trash"></i></button>
+        <div class="mt-item ${batchClass}" data-id="${entry.id}">
+            ${checkbox}
+            <div class="mt-item-body" style="flex:1;min-width:0;">
+                <div class="mt-item-head">
+                    <strong>${escapeHtml(entry.title)}</strong>
+                    <span class="mt-badge">${escapeHtml(entry.category || "未分类")}</span>
+                </div>
+                <div class="mt-item-meta">作者：${escapeHtml(entry.author || "匿名")} · ${date} ${tags}</div>
+                <div class="mt-item-preview">${preview}${entry.content.length > 120 ? "…" : ""}</div>
+                <div class="mt-item-actions">
+                    <button class="menu_button mt-send" title="直接发送"><i class="fa-solid fa-paper-plane"></i> 发送</button>
+                    <button class="menu_button mt-insert" title="插入到输入框"><i class="fa-solid fa-arrow-turn-down"></i> 插入</button>
+                    <button class="menu_button mt-copy" title="复制到剪贴板"><i class="fa-solid fa-copy"></i></button>
+                    <button class="menu_button mt-edit" title="编辑"><i class="fa-solid fa-pen"></i></button>
+                    <button class="menu_button mt-delete" title="删除"><i class="fa-solid fa-trash"></i></button>
+                </div>
             </div>
         </div>
     `;
@@ -388,6 +455,7 @@ function renderList() {
     if (entries.length === 0) {
         $list.append(`<div class="mt-empty">没有找到匹配的小剧场，点右上角 ➕ 新增一个吧～</div>`);
         updateMemoryInfo();
+        updateBatchBar();
         return;
     }
 
@@ -437,6 +505,7 @@ function renderList() {
     });
 
     updateMemoryInfo();
+    updateBatchBar();
 }
 
 // ---------------- 发送/插入 ----------------
@@ -607,6 +676,55 @@ function bindEvents() {
             $group.addClass("collapsed");
             collapsedCategories.add(cat);
         }
+    });
+
+    // 批量模式
+    $(document).on("click", "#mt_batch", () => {
+        batchMode = !batchMode;
+        if (!batchMode) selectedIds.clear();
+        renderList();
+    });
+
+    $(document).on("change", ".mt-checkbox", function () {
+        const id = $(this).val();
+        if ($(this).prop("checked")) {
+            selectedIds.add(id);
+        } else {
+            selectedIds.delete(id);
+        }
+        updateBatchBar();
+    });
+
+    $(document).on("change", "#mt_select_all", function () {
+        const checked = $(this).prop("checked");
+        $(".mt-checkbox").each(function () {
+            const id = $(this).val();
+            $(this).prop("checked", checked);
+            if (checked) selectedIds.add(id);
+            else selectedIds.delete(id);
+        });
+        updateBatchBar();
+    });
+
+    $(document).on("click", "#mt_batch_delete", function () {
+        if (selectedIds.size === 0) return;
+        if (!confirm(`确定要删除选中的 ${selectedIds.size} 条小剧场吗？此操作无法撤销。`)) return;
+        const settings = getSettings();
+        const before = settings.entries.length;
+        settings.entries = settings.entries.filter((x) => !selectedIds.has(x.id));
+        persist();
+        const deleted = before - settings.entries.length;
+        selectedIds.clear();
+        batchMode = false;
+        updateCategoryOptions();
+        renderList();
+        toastr.success(`已删除 ${deleted} 条小剧场`);
+    });
+
+    $(document).on("click", "#mt_batch_cancel", function () {
+        batchMode = false;
+        selectedIds.clear();
+        renderList();
     });
 
     // 内存阈值设置

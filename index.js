@@ -1,7 +1,8 @@
 // ============================================================
 // 小剧场收藏夹 Mini Theater Vault
 // 一个 SillyTavern 第三方扩展：本地保存"小剧场"文本，
-// 支持作者标注、分类/标签/搜索/排序/折叠，并可一键插入或发送到聊天框。
+// 支持作者标注、分类/标签/搜索/排序/折叠/内存查看，
+// 并可一键插入或发送到聊天框。
 // ============================================================
 
 import { extension_settings } from "../../../extensions.js";
@@ -65,7 +66,7 @@ function injectStyles() {
     const style = document.createElement("style");
     style.id = "mt_dynamic_styles";
     style.textContent = `
-        /* 工具栏：让三个控件能在一行或换行时正常排列 */
+        /* 工具栏 */
         .mt-toolbar {
             display: flex;
             flex-wrap: wrap;
@@ -81,7 +82,33 @@ function injectStyles() {
             min-width: 110px;
         }
 
-        /* 分类折叠区块 */
+        /* 内存占用条 */
+        .mt-memory-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 8px;
+            margin-top: 6px;
+            font-size: 0.85em;
+            border-radius: 6px;
+            background: rgba(100, 200, 100, 0.12);
+            color: #2a6;
+            transition: background 0.3s, color 0.3s;
+        }
+        .mt-memory-bar.warn {
+            background: rgba(230, 180, 50, 0.15);
+            color: #a70;
+        }
+        .mt-memory-bar.danger {
+            background: rgba(230, 80, 80, 0.12);
+            color: #c33;
+        }
+        .mt-memory-bar .mt-memory-right {
+            opacity: 0.75;
+            font-size: 0.9em;
+        }
+
+        /* 分类折叠 */
         .mt-group { margin-bottom: 10px; }
         .mt-group-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -103,7 +130,6 @@ function injectStyles() {
         }
         .mt-group.collapsed .mt-group-arrow { transform: rotate(-90deg); }
 
-        /* 内容区：grid 动画，不会溢出遮挡 */
         .mt-group-items {
             display: grid;
             grid-template-rows: 1fr;
@@ -152,6 +178,10 @@ function panelHtml() {
                 <option value="title_asc">名称 A-Z</option>
                 <option value="title_desc">名称 Z-A</option>
             </select>
+        </div>
+        <div id="mt_memory_bar" class="mt-memory-bar">
+            <span><i class="fa-solid fa-database"></i> <span id="mt_memory_text">计算中…</span></span>
+            <span class="mt-memory-right"><span id="mt_entry_count">0</span> 条小剧场</span>
         </div>
         <div id="mt_list" class="mt-list"></div>
         <input id="mt_import_file" type="file" accept="application/json" style="display:none;" />
@@ -205,6 +235,37 @@ function updateCategoryOptions() {
     const $list = $("#mt_category_list");
     $list.empty();
     categories.forEach((c) => $list.append(`<option value="${escapeHtml(c)}"></option>`));
+}
+
+// 计算并更新内存占用显示
+function updateMemoryInfo() {
+    const settings = getSettings();
+    const count = settings.entries.length;
+
+    // 计算 entries 的 JSON 字节数
+    const json = JSON.stringify(settings.entries);
+    const bytes = new Blob([json]).size;
+
+    let sizeText;
+    if (bytes < 1024) {
+        sizeText = `${bytes} B`;
+    } else if (bytes < 1024 * 1024) {
+        sizeText = `${(bytes / 1024).toFixed(1)} KB`;
+    } else {
+        sizeText = `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    $("#mt_memory_text").text(`占用 ${sizeText}`);
+    $("#mt_entry_count").text(count);
+
+    // 根据大小变色提醒（localStorage 通常上限约 5MB）
+    const $bar = $("#mt_memory_bar");
+    $bar.removeClass("warn danger");
+    if (bytes >= 1024 * 1024) {
+        $bar.addClass("danger");
+    } else if (bytes >= 200 * 1024) {
+        $bar.addClass("warn");
+    }
 }
 
 function renderEntryCard(entry) {
@@ -273,6 +334,7 @@ function renderList() {
 
     if (entries.length === 0) {
         $list.append(`<div class="mt-empty">没有找到匹配的小剧场，点右上角 ➕ 新增一个吧～</div>`);
+        updateMemoryInfo();
         return;
     }
 
@@ -320,6 +382,8 @@ function renderList() {
             </div>
         `);
     });
+
+    updateMemoryInfo();
 }
 
 // ---------------- 发送/插入 ----------------

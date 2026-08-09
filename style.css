@@ -146,8 +146,7 @@
 }
 .mt-editor-inner {
     width: min(560px, 92vw);
-    /* 原来：margin: 0 auto; */
-    margin: max(24px, 6vh) auto 0 auto;   /* ← 顶部留出至少 24px 或 6vh */ 
+    margin: 0 auto;
     background: var(--SmartThemeBlurTintColor, #1e1e1e);
     color: var(--SmartThemeBodyColor, #eee);
     border: 1px solid var(--SmartThemeBorderColor, #555);

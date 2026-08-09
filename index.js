@@ -65,31 +65,51 @@ function injectStyles() {
     const style = document.createElement("style");
     style.id = "mt_dynamic_styles";
     style.textContent = `
-        /* 分类折叠区块 */
-        .mt-group { margin-bottom: 12px; border-radius: 8px; overflow: hidden; }
+        /* 分类折叠区块 —— 不再设 overflow/border-radius，避免拦截滚动 */
+        .mt-group { margin-bottom: 10px; }
+        
         .mt-group-header {
             display: flex; align-items: center; justify-content: space-between;
             padding: 8px 12px; background: rgba(120,120,120,0.15);
             cursor: pointer; user-select: none; font-weight: 600;
             transition: background 0.2s;
+            border-radius: 8px;          /* 圆角只给标题 */
+            position: relative;
         }
         .mt-group-header:hover { background: rgba(120,120,120,0.25); }
-        .mt-group-header .mt-group-title { display: flex; align-items: center; gap: 8px; }
+        
+        .mt-group-header .mt-group-title {
+            display: flex; align-items: center; gap: 8px;
+        }
         .mt-group-header .mt-group-count {
-            font-size: 0.8em; opacity: 0.7; font-weight: 400;
+            font-size: 0.8em; opacity: 0.6; font-weight: 400;
         }
         .mt-group-header .mt-group-arrow {
-            transition: transform 0.25s ease; font-size: 0.9em;
+            transition: transform 0.2s ease; font-size: 0.9em;
         }
         .mt-group.collapsed .mt-group-arrow { transform: rotate(-90deg); }
+        
+        /* 内容区 —— 用 grid 动画替代 max-height，高度自适应，不会溢出遮挡 */
         .mt-group-items {
-            display: flex; flex-direction: column; gap: 8px; padding: 8px;
-            transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
-            max-height: 50000px; opacity: 1; overflow: hidden;
+            display: grid;
+            grid-template-rows: 1fr;
+            transition: grid-template-rows 0.35s ease, opacity 0.3s ease, padding 0.3s ease;
+            opacity: 1;
+            padding: 8px 4px;
+            gap: 8px;
         }
         .mt-group.collapsed .mt-group-items {
-            max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0;
+            grid-template-rows: 0fr;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
         }
+        /* 内部再包一层用于裁剪，避免内容在收起时漏出来 */
+        .mt-group-items > .mt-item {
+            overflow: hidden;
+            min-height: 0;
+        }
+        
         /* 排序选择器 */
         #mt_sort { min-width: 120px; }
     `;

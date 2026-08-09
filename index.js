@@ -184,7 +184,7 @@ function injectStyles() {
         }
 
         /* 分类折叠 */
-        .mt-group { margin-bottom: 10px; }
+        .mt-group { margin-bottom: 4px; }
         .mt-group-header {
             display: flex; align-items: center; justify-content: space-between;
             padding: 8px 12px; background: rgba(120,120,120,0.15);
@@ -306,9 +306,9 @@ function panelHtml() {
                 <option value="createdAt_asc">最早创建</option>
                 <option value="title_asc">名称 A-Z</option>
                 <option value="title_desc">名称 Z-A</option>
-                <option value="starred_desc">⭐ 收藏优先</option>
-                <option value="useCount_desc">🔥 最常用</option>
-                <option value="useCount_asc">🧊 最少用</option>
+                <option value="starred_desc">收藏优先</option>
+                <option value="useCount_desc">最常用</option>
+                <option value="useCount_asc">最少用</option>
             </select>
         </div>
         <div id="mt_batch_bar" class="mt-batch-bar">

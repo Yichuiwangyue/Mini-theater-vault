@@ -72,162 +72,12 @@ function injectStyles() {
     const style = document.createElement("style");
     style.id = "mt_dynamic_styles";
     style.textContent = `
-        /* ========== 基础布局 ========== */
-        .mt-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.4);
-            backdrop-filter: blur(2px);
-            z-index: 9998;
-        }
-        .mt-overlay.mt-show { display: block; }
-
-        .mt-panel {
-            display: none;
-            position: fixed;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            width: 92vw;
-            max-width: 720px;
-            height: 85vh;
-            max-height: 900px;
-            background: var(--SmartThemeBlurTintColor, rgba(240,240,240,0.95));
-            border-radius: 12px;
-            z-index: 9999;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 12px 40px rgba(0,0,0,0.25);
-        }
-        .mt-panel.mt-show { display: flex; }
-
-        .mt-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 18px;
-            border-bottom: 1px solid rgba(0,0,0,0.08);
-            flex-shrink: 0;
-        }
-        .mt-title {
-            font-size: 1.15em;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .mt-header-btns {
-            display: flex;
-            gap: 6px;
-        }
-
-        .mt-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px 14px;
-        }
-
-        /* ========== 编辑器弹窗 ========== */
-        .mt-editor {
-            display: none;
-            position: fixed;
-            inset: 0;
-            z-index: 10000;
-            justify-content: center;
-            align-items: center;
-            padding: 16px;
-            background: rgba(0,0,0,0.35);
-            backdrop-filter: blur(2px);
-        }
-        .mt-editor.mt-show { display: flex; }
-
-        .mt-editor-inner {
-            background: var(--SmartThemeBlurTintColor, rgba(250,250,250,0.98));
-            border-radius: 12px;
-            width: 100%;
-            max-width: 640px;
-            max-height: 92vh;
-            display: flex;
-            flex-direction: column;
-            padding: 24px;
-            overflow-y: auto;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-
-        .mt-editor-inner h3 {
-            margin: 0 0 18px 0;
-            font-size: 1.3em;
-            font-weight: 600;
-            flex-shrink: 0;
-        }
-
-        .mt-editor-inner label {
-            display: block;
-            margin-bottom: 5px;
-            font-size: 0.88em;
-            color: rgba(60,60,60,0.85);
-            font-weight: 500;
-            margin-top: 12px;
-            flex-shrink: 0;
-        }
-        .mt-editor-inner label:first-of-type {
-            margin-top: 0;
-        }
-
-        .mt-editor-inner input[type="text"],
-        .mt-editor-inner textarea {
-            width: 100%;
-            padding: 10px 12px;
-            border-radius: 8px;
-            border: 1px solid rgba(0,0,0,0.15);
-            background: rgba(255,255,255,0.7);
-            font-size: 0.95em;
-            box-sizing: border-box;
-            font-family: inherit;
-            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-        }
-        .mt-editor-inner input[type="text"]:focus,
-        .mt-editor-inner textarea:focus {
-            outline: none;
-            border-color: rgba(80,130,220,0.6);
-            background: rgba(255,255,255,0.95);
-            box-shadow: 0 0 0 3px rgba(80,130,220,0.1);
-        }
-
-        .mt-editor-inner textarea {
-            resize: vertical;
-            min-height: 220px;
-            line-height: 1.5;
-        }
-
-        .mt-editor-row {
-            display: flex;
-            gap: 12px;
-            flex-shrink: 0;
-        }
-        .mt-editor-row > div {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .mt-editor-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            margin-top: 20px;
-            padding-top: 14px;
-            border-top: 1px solid rgba(0,0,0,0.08);
-            flex-shrink: 0;
-        }
-
-        /* ========== 工具栏 ========== */
+        /* 工具栏 */
         .mt-toolbar {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
             align-items: center;
-            padding: 10px 14px;
-            border-bottom: 1px solid rgba(0,0,0,0.06);
         }
         .mt-toolbar > input[type="text"] {
             flex: 1 1 200px;
@@ -238,14 +88,14 @@ function injectStyles() {
             min-width: 110px;
         }
 
-        /* ========== 批量操作栏 ========== */
+        /* 批量操作栏 */
         .mt-batch-bar {
             display: none;
             flex-wrap: wrap;
             gap: 8px;
             align-items: center;
             padding: 6px 8px;
-            margin: 6px 14px 0;
+            margin-top: 6px;
             background: rgba(0,0,0,0.04);
             border-radius: 6px;
         }
@@ -259,13 +109,13 @@ function injectStyles() {
         }
         #mt_batch_delete:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* ========== 内存占用条 ========== */
+        /* 内存占用条 */
         .mt-memory-bar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 6px 14px;
-            margin: 8px 14px 0;
+            padding: 4px 8px;
+            margin-top: 6px;
             font-size: 0.85em;
             border-radius: 6px;
             background: rgba(100, 200, 100, 0.12);
@@ -294,17 +144,17 @@ function injectStyles() {
             border-radius: 4px;
         }
 
-        /* ========== 阈值设置面板 ========== */
+        /* 阈值设置面板 */
         .mt-memory-settings {
             display: none;
             flex-wrap: wrap;
             gap: 8px;
             align-items: center;
-            padding: 6px 14px;
+            padding: 6px 10px;
             font-size: 0.8em;
             background: rgba(0,0,0,0.04);
             border-radius: 0 0 6px 6px;
-            margin: 0 14px;
+            margin-top: -2px;
         }
         .mt-memory-settings label {
             display: flex;
@@ -324,7 +174,7 @@ function injectStyles() {
             font-size: 0.9em;
         }
 
-        /* ========== 分类折叠 ========== */
+               /* 分类折叠 */
         .mt-group { margin-bottom: 10px; }
         .mt-group-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -364,17 +214,8 @@ function injectStyles() {
             gap: 0;
         }
 
-        /* ========== 列表项 ========== */
-        .mt-item {
-            background: rgba(255,255,255,0.5);
-            border-radius: 8px;
-            padding: 10px 12px;
-            border: 1px solid rgba(0,0,0,0.06);
-            transition: background 0.2s;
-        }
-        .mt-item:hover {
-            background: rgba(255,255,255,0.75);
-        }
+        /* 批量复选框 */
+        .mt-item { display: block; }
         .mt-item.batch-mode { display: flex; gap: 8px; align-items: flex-start; }
         .mt-item-check {
             display: none;
@@ -388,46 +229,8 @@ function injectStyles() {
             height: 16px;
             cursor: pointer;
         }
-        .mt-item-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-bottom: 4px;
-        }
-        .mt-badge {
-            font-size: 0.75em;
-            padding: 2px 8px;
-            background: rgba(120,120,120,0.15);
-            border-radius: 6px;
-            white-space: nowrap;
-        }
-        .mt-item-meta {
-            font-size: 0.82em;
-            color: rgba(80,80,80,0.7);
-            margin-bottom: 2px;
-        }
-        .mt-item-preview {
-            font-size: 0.85em;
-            color: rgba(80,80,80,0.65);
-            line-height: 1.4;
-            margin: 6px 0;
-            word-break: break-word;
-        }
-        .mt-item-actions {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-            margin-top: 8px;
-        }
-        .mt-empty {
-            text-align: center;
-            padding: 40px 20px;
-            color: rgba(100,100,100,0.6);
-            font-size: 0.95em;
-        }
 
-        /* ========== 标签样式 ========== */
+        /* 标签样式 */
         .mt-tag {
             display: inline-block;
             background: rgba(120, 120, 120, 0.12);

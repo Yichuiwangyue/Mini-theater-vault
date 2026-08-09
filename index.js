@@ -1,7 +1,7 @@
 // ============================================================
 // 小剧场收藏夹 Mini Theater Vault
 // 一个 SillyTavern 第三方扩展：本地保存"小剧场"文本，
-// 支持作者标注、分类/标签、搜索，并可一键插入或发送到聊天框。
+// 支持作者标注、分类/标签/搜索/排序/折叠，并可一键插入或发送到聊天框。
 // ============================================================
 
 import { extension_settings } from "../../../extensions.js";
@@ -11,7 +11,7 @@ const MODULE_NAME = "mini_theater_vault";
 const DEFAULT_CATEGORIES = ["日常", "约会", "历史", "节日", "任务", "其他"];
 
 let currentEditId = null;
-let collapsedCategories = new Set(); // 记录被折叠的分类
+let collapsedCategories = new Set();
 
 // ---------------- 数据层 ----------------
 
@@ -65,19 +65,33 @@ function injectStyles() {
     const style = document.createElement("style");
     style.id = "mt_dynamic_styles";
     style.textContent = `
-        /* 分类折叠区块 —— 不再设 overflow/border-radius，避免拦截滚动 */
+        /* 工具栏：让三个控件能在一行或换行时正常排列 */
+        .mt-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .mt-toolbar > input[type="text"] {
+            flex: 1 1 200px;
+            min-width: 120px;
+        }
+        .mt-toolbar > select {
+            flex: 0 1 auto;
+            min-width: 110px;
+        }
+
+        /* 分类折叠区块 */
         .mt-group { margin-bottom: 10px; }
-        
         .mt-group-header {
             display: flex; align-items: center; justify-content: space-between;
             padding: 8px 12px; background: rgba(120,120,120,0.15);
             cursor: pointer; user-select: none; font-weight: 600;
             transition: background 0.2s;
-            border-radius: 8px;          /* 圆角只给标题 */
+            border-radius: 8px;
             position: relative;
         }
         .mt-group-header:hover { background: rgba(120,120,120,0.25); }
-        
         .mt-group-header .mt-group-title {
             display: flex; align-items: center; gap: 8px;
         }
@@ -88,8 +102,8 @@ function injectStyles() {
             transition: transform 0.2s ease; font-size: 0.9em;
         }
         .mt-group.collapsed .mt-group-arrow { transform: rotate(-90deg); }
-        
-        /* 内容区 —— 用 grid 动画替代 max-height，高度自适应，不会溢出遮挡 */
+
+        /* 内容区：grid 动画，不会溢出遮挡 */
         .mt-group-items {
             display: grid;
             grid-template-rows: 1fr;
@@ -104,14 +118,10 @@ function injectStyles() {
             padding-top: 0;
             padding-bottom: 0;
         }
-        /* 内部再包一层用于裁剪，避免内容在收起时漏出来 */
         .mt-group-items > .mt-item {
             overflow: hidden;
             min-height: 0;
         }
-        
-        /* 排序选择器 */
-        #mt_sort { min-width: 120px; }
     `;
     document.head.appendChild(style);
 }
@@ -197,7 +207,6 @@ function updateCategoryOptions() {
     categories.forEach((c) => $list.append(`<option value="${escapeHtml(c)}"></option>`));
 }
 
-// 渲染单条小剧场卡片
 function renderEntryCard(entry) {
     const previewRaw = entry.content.slice(0, 120).replace(/\n/g, " ");
     const preview = escapeHtml(previewRaw);
@@ -275,7 +284,7 @@ function renderList() {
         groups[cat].push(e);
     });
 
-    // 分类的展示顺序：按该分类下第一条数据的当前排序值来决定
+    // 分类顺序也跟随当前排序
     const groupNames = Object.keys(groups);
     groupNames.sort((ga, gb) => {
         const aFirst = groups[ga][0];
@@ -459,8 +468,6 @@ function bindEvents() {
     $(document).on("click", "#mt_cancel", closeEditor);
     $(document).on("click", "#mt_save", saveEditor);
 
-    // 手机上点某个输入框时，键盘弹出前后延迟一下再把该输入框滚动到可视区域中央，
-    // 避免被键盘挡住或钉在屏幕外够不着。
     $(document).on("focus", "#mini_theater_editor input, #mini_theater_editor textarea", function () {
         const el = this;
         setTimeout(() => {

@@ -1,7 +1,7 @@
 // ============================================================
 // 小剧场收藏夹 Mini Theater Vault
 // 一个 SillyTavern 第三方扩展：本地保存"小剧场"文本，
-// 支持作者标注、分类/标签/搜索/排序/折叠/内存查看/自定义阈值/批量删除/收藏置顶/使用频率，
+// 支持作者标注、分类/标签/搜索/排序/折叠/内存查看/自定义阈值/批量删除，
 // 并可一键插入或发送到聊天框。
 // ============================================================
 
@@ -11,7 +11,7 @@ import { saveSettingsDebounced } from "../../../../script.js";
 const MODULE_NAME = "mini_theater_vault";
 
 let currentEditId = null;
-let expandedCategories = new Set();
+let expandedCategories = new Set(); // 改为记录"已展开"的分类，默认全部折叠
 let batchMode = false;
 let selectedIds = new Set();
 
@@ -29,13 +29,6 @@ function getSettings() {
     if (!Array.isArray(s.entries)) s.entries = [];
     if (typeof s.warnThreshold !== "number") s.warnThreshold = 200;
     if (typeof s.dangerThreshold !== "number") s.dangerThreshold = 1024;
-
-    // 数据迁移：补全新字段
-    s.entries.forEach((e) => {
-        if (typeof e.starred !== "boolean") e.starred = false;
-        if (typeof e.useCount !== "number") e.useCount = 0;
-    });
-
     return s;
 }
 
@@ -68,8 +61,6 @@ function seedDefaultEntry(settings) {
                 "现在停止角色扮演。请把时间线调整到{{user}}和{{char}}交往前的时间点，在这个背景下，如果{{user}}在深夜失眠、好奇着想尝试百物语的话，两人会怎么相处呢？\n请生成一个小剧场，内容是{{char}}和{{user}}的行动和相处。会是什么样的场景呢？会去现世的店、万屋的店、还是出阵时去当时历史的店？会涉及些什么有趣的内容呢？会不会发生一些很好玩的状况或者事后衍生出讨论和吐槽呢？需符合{{user}}和{{char}}的背景设定，请结合性格、背景故事、日常偏好、人际关系等展开情节，字数要求4000字以上，如果字数不够可以适当拉长，字数没有上限。",
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            starred: false,
-            useCount: 0,
         });
     }
 }
@@ -184,7 +175,7 @@ function injectStyles() {
         }
 
         /* 分类折叠 */
-        .mt-group { margin-bottom: 4px; }
+        .mt-group { margin-bottom: 10px; }
         .mt-group-header {
             display: flex; align-items: center; justify-content: space-between;
             padding: 8px 12px; background: rgba(120,120,120,0.15);
@@ -240,41 +231,28 @@ function injectStyles() {
             cursor: pointer;
         }
 
-        /* 收藏星星 */
-        .mt-star {
-            color: #daa520;
-            cursor: pointer;
-            transition: transform 0.15s;
-            margin-right: 4px;
+        /* 标签样式 */
+        .mt-tag {
             display: inline-block;
+            background: rgba(120, 120, 120, 0.12);
+            color: rgba(80, 80, 80, 0.85);
+            font-size: 0.82em;
+            padding: 2px 10px;
+            border-radius: 999px;
+            line-height: 1.4;
+            white-space: nowrap;
+            transition: background 0.2s, color 0.2s;
         }
-        .mt-star:hover { transform: scale(1.25); }
-        .mt-star .fa-regular { opacity: 0.35; }
-        .mt-star .fa-regular:hover { opacity: 0.7; }
-
-        /* 标签样式 —— 独立成行，整齐美观 */
+        .mt-tag:hover {
+            background: rgba(120, 120, 120, 0.22);
+            color: rgba(60, 60, 60, 0.95);
+        }
         .mt-item-tags {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
-            margin-top: 5px;
-            margin-bottom: 5px;
-            padding-left: 2px;
-        }
-        .mt-tag {
-            display: inline-flex;
-            align-items: center;
-            padding: 2px 10px;
-            border-radius: 12px;
-            background: rgba(120,120,120,0.1);
-            color: rgba(0,0,0,0.6);
-            font-size: 0.82em;
-            line-height: 1.3;
-            white-space: nowrap;
-            transition: background 0.2s;
-        }
-        .mt-tag:hover {
-            background: rgba(120,120,120,0.2);
+            margin-top: 4px;
+            margin-bottom: 2px;
         }
     `;
     document.head.appendChild(style);
@@ -306,9 +284,6 @@ function panelHtml() {
                 <option value="createdAt_asc">最早创建</option>
                 <option value="title_asc">名称 A-Z</option>
                 <option value="title_desc">名称 Z-A</option>
-                <option value="starred_desc">收藏优先</option>
-                <option value="useCount_desc">最常用</option>
-                <option value="useCount_asc">最少用</option>
             </select>
         </div>
         <div id="mt_batch_bar" class="mt-batch-bar">
@@ -359,6 +334,7 @@ function panelHtml() {
     </div>`;
 }
 
+// 不再预设默认分类，只从用户已有条目中收集
 function getAllCategories(settings) {
     const set = new Set();
     settings.entries.forEach((e) => {
@@ -433,29 +409,23 @@ function renderEntryCard(entry) {
     const previewRaw = entry.content.slice(0, 120).replace(/\n/g, " ");
     const preview = escapeHtml(previewRaw);
     const tags = (entry.tags || []).map((t) => `<span class="mt-tag">#${escapeHtml(t)}</span>`).join("");
+    const tagsHtml = (entry.tags || []).length > 0
+        ? `<div class="mt-item-tags">${tags}</div>`
+        : "";
     const date = new Date(entry.updatedAt).toLocaleDateString();
     const batchClass = batchMode ? "batch-mode" : "";
     const checkbox = batchMode
         ? `<label class="mt-item-check"><input type="checkbox" class="mt-checkbox" value="${entry.id}" ${selectedIds.has(entry.id) ? "checked" : ""}></label>`
         : "";
-
-    const starIcon = entry.starred ? "fa-solid fa-star" : "fa-regular fa-star";
-    const starTitle = entry.starred ? "取消收藏" : "收藏";
-
-    const tagsHtml = (entry.tags || []).length > 0
-        ? `<div class="mt-item-tags">${tags}</div>`
-        : "";
-
     return `
         <div class="mt-item ${batchClass}" data-id="${entry.id}">
             ${checkbox}
             <div class="mt-item-body" style="flex:1;min-width:0;">
                 <div class="mt-item-head">
-                    <span class="mt-star" title="${starTitle}"><i class="${starIcon}"></i></span>
                     <strong>${escapeHtml(entry.title)}</strong>
                     <span class="mt-badge">${escapeHtml(entry.category || "未分类")}</span>
                 </div>
-                <div class="mt-item-meta">作者：${escapeHtml(entry.author || "匿名")} · ${date} · 使用 ${entry.useCount || 0} 次</div>
+                <div class="mt-item-meta">作者：${escapeHtml(entry.author || "匿名")} · ${date}</div>
                 ${tagsHtml}
                 <div class="mt-item-preview">${preview}${entry.content.length > 120 ? "…" : ""}</div>
                 <div class="mt-item-actions">
@@ -494,18 +464,6 @@ function renderList() {
     // 排序
     const [sortKey, sortDir] = sortMode.split("_");
     entries.sort((a, b) => {
-        if (sortKey === "starred") {
-            if (a.starred && !b.starred) return -1;
-            if (!a.starred && b.starred) return 1;
-            return (b.updatedAt || 0) - (a.updatedAt || 0);
-        }
-        if (sortKey === "useCount") {
-            const va = (a.useCount || 0);
-            const vb = (b.useCount || 0);
-            if (va < vb) return sortDir === "asc" ? -1 : 1;
-            if (va > vb) return sortDir === "asc" ? 1 : -1;
-            return (b.updatedAt || 0) - (a.updatedAt || 0);
-        }
         let va, vb;
         if (sortKey === "title") {
             va = (a.title || "").toLowerCase();
@@ -543,18 +501,7 @@ function renderList() {
         const aFirst = groups[ga][0];
         const bFirst = groups[gb][0];
         let va, vb;
-
-        if (sortKey === "starred") {
-            const aHasStar = groups[ga].some((e) => e.starred);
-            const bHasStar = groups[gb].some((e) => e.starred);
-            if (aHasStar && !bHasStar) return -1;
-            if (!aHasStar && bHasStar) return 1;
-            return (bFirst.updatedAt || 0) - (aFirst.updatedAt || 0);
-        }
-        if (sortKey === "useCount") {
-            va = aFirst.useCount || 0;
-            vb = bFirst.useCount || 0;
-        } else if (sortKey === "title") {
+        if (sortKey === "title") {
             va = ga.toLowerCase();
             vb = gb.toLowerCase();
         } else {
@@ -568,6 +515,7 @@ function renderList() {
 
     groupNames.forEach((cat) => {
         const catEntries = groups[cat];
+        // 默认折叠！只有用户点过的分类才会展开
         const isCollapsed = !expandedCategories.has(cat);
         const itemsHtml = catEntries.map((e) => renderEntryCard(e)).join("");
 
@@ -665,8 +613,6 @@ function saveEditor() {
             content,
             createdAt: now,
             updatedAt: now,
-            starred: false,
-            useCount: 0,
         });
     }
 
@@ -711,8 +657,6 @@ function importEntries(file) {
                         content: String(item.content),
                         createdAt: item.createdAt || Date.now(),
                         updatedAt: Date.now(),
-                        starred: typeof item.starred === "boolean" ? item.starred : false,
-                        useCount: typeof item.useCount === "number" ? item.useCount : 0,
                     });
                     count++;
                 }
@@ -760,18 +704,6 @@ function bindEvents() {
         } else {
             $group.addClass("collapsed");
             expandedCategories.delete(cat);
-        }
-    });
-
-    // 收藏星星
-    $(document).on("click", ".mt-star", function (e) {
-        e.stopPropagation();
-        const id = $(this).closest(".mt-item").data("id");
-        const entry = getSettings().entries.find((x) => x.id === id);
-        if (entry) {
-            entry.starred = !entry.starred;
-            persist();
-            renderList();
         }
     });
 
@@ -865,21 +797,13 @@ function bindEvents() {
     $(document).on("click", ".mt-item .mt-send", function () {
         const id = $(this).closest(".mt-item").data("id");
         const entry = getSettings().entries.find((x) => x.id === id);
-        if (entry) {
-            entry.useCount = (entry.useCount || 0) + 1;
-            persist();
-            sendToChat(entry.content, true);
-        }
+        if (entry) sendToChat(entry.content, true);
     });
 
     $(document).on("click", ".mt-item .mt-insert", function () {
         const id = $(this).closest(".mt-item").data("id");
         const entry = getSettings().entries.find((x) => x.id === id);
-        if (entry) {
-            entry.useCount = (entry.useCount || 0) + 1;
-            persist();
-            sendToChat(entry.content, false);
-        }
+        if (entry) sendToChat(entry.content, false);
     });
 
     $(document).on("click", ".mt-item .mt-copy", function () {

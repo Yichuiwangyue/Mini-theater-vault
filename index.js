@@ -251,6 +251,31 @@ function injectStyles() {
         .mt-star:hover { transform: scale(1.25); }
         .mt-star .fa-regular { opacity: 0.35; }
         .mt-star .fa-regular:hover { opacity: 0.7; }
+
+        /* 标签样式 —— 独立成行，整齐美观 */
+        .mt-item-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 5px;
+            margin-bottom: 5px;
+            padding-left: 2px;
+        }
+        .mt-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 10px;
+            border-radius: 12px;
+            background: rgba(120,120,120,0.1);
+            color: rgba(0,0,0,0.6);
+            font-size: 0.82em;
+            line-height: 1.3;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+        .mt-tag:hover {
+            background: rgba(120,120,120,0.2);
+        }
     `;
     document.head.appendChild(style);
 }
@@ -407,7 +432,7 @@ function updateBatchBar() {
 function renderEntryCard(entry) {
     const previewRaw = entry.content.slice(0, 120).replace(/\n/g, " ");
     const preview = escapeHtml(previewRaw);
-    const tags = (entry.tags || []).map((t) => `<span class="mt-tag">#${escapeHtml(t)}</span>`).join(" ");
+    const tags = (entry.tags || []).map((t) => `<span class="mt-tag">#${escapeHtml(t)}</span>`).join("");
     const date = new Date(entry.updatedAt).toLocaleDateString();
     const batchClass = batchMode ? "batch-mode" : "";
     const checkbox = batchMode
@@ -416,6 +441,10 @@ function renderEntryCard(entry) {
 
     const starIcon = entry.starred ? "fa-solid fa-star" : "fa-regular fa-star";
     const starTitle = entry.starred ? "取消收藏" : "收藏";
+
+    const tagsHtml = (entry.tags || []).length > 0
+        ? `<div class="mt-item-tags">${tags}</div>`
+        : "";
 
     return `
         <div class="mt-item ${batchClass}" data-id="${entry.id}">
@@ -426,7 +455,8 @@ function renderEntryCard(entry) {
                     <strong>${escapeHtml(entry.title)}</strong>
                     <span class="mt-badge">${escapeHtml(entry.category || "未分类")}</span>
                 </div>
-                <div class="mt-item-meta">作者：${escapeHtml(entry.author || "匿名")} · ${date} · 使用 ${entry.useCount || 0} 次 ${tags}</div>
+                <div class="mt-item-meta">作者：${escapeHtml(entry.author || "匿名")} · ${date} · 使用 ${entry.useCount || 0} 次</div>
+                ${tagsHtml}
                 <div class="mt-item-preview">${preview}${entry.content.length > 120 ? "…" : ""}</div>
                 <div class="mt-item-actions">
                     <button class="menu_button mt-send" title="直接发送"><i class="fa-solid fa-paper-plane"></i> 发送</button>

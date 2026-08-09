@@ -328,6 +328,15 @@ function bindEvents() {
     $(document).on("click", "#mt_cancel", closeEditor);
     $(document).on("click", "#mt_save", saveEditor);
 
+    // 手机上点某个输入框时，键盘弹出前后延迟一下再把该输入框滚动到可视区域中央，
+    // 避免被键盘挡住或钉在屏幕外够不着。
+    $(document).on("focus", "#mini_theater_editor input, #mini_theater_editor textarea", function () {
+        const el = this;
+        setTimeout(() => {
+            el.scrollIntoView({ block: "center", behavior: "smooth" });
+        }, 300);
+    });
+
     $(document).on("input", "#mt_search", renderList);
     $(document).on("change", "#mt_category_filter", renderList);
 

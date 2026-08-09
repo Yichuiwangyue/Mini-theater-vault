@@ -133,21 +133,26 @@
     inset: 0;
     z-index: 10000;
     background: rgba(0, 0, 0, 0.6);
-    align-items: center;
-    justify-content: center;
+    /* 关键修复：外层整体可滚动，而不是用 flex 居中把内容框钉死在屏幕正中间。
+       手机键盘弹出后可视区域变矮，居中会把顶部（标题栏）顶到看不见/够不到的地方。
+       改成这里滚动，键盘弹出时也能拖到最顶部。 */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px 12px 40vh 12px;
+    box-sizing: border-box;
 }
 .mt-editor.mt-show {
-    display: flex;
+    display: block;
 }
 .mt-editor-inner {
     width: min(560px, 92vw);
-    max-height: 88vh;
-    overflow-y: auto;
+    margin: 0 auto;
     background: var(--SmartThemeBlurTintColor, #1e1e1e);
     color: var(--SmartThemeBodyColor, #eee);
     border: 1px solid var(--SmartThemeBorderColor, #555);
     border-radius: 10px;
     padding: 18px;
+    box-sizing: border-box;
 }
 .mt-editor-inner label {
     display: block;

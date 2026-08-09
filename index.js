@@ -1,7 +1,6 @@
 // ============================================================
-// 小剧场收藏夹 Mini Theater Vault
-// 一个 SillyTavern 第三方扩展：本地保存"小剧场"文本，
-// 支持作者标注、分类/标签、搜索，并可一键插入或发送到聊天框。
+// 小剧场收藏夹 Mini Theater Vault (Optimized Version)
+// 一个 SillyTavern 第三方扩展：本地保存"小剧场"文本
 // ============================================================
 
 import { extension_settings } from "../../../extensions.js";
@@ -11,6 +10,8 @@ const MODULE_NAME = "mini_theater_vault";
 const DEFAULT_CATEGORIES = ["日常", "约会", "历史", "节日", "任务", "其他"];
 
 let currentEditId = null;
+// 用于记录哪些分类被折叠了（临时记录，刷新后重置，如果需要持久化可以存入 settings）
+let collapsedCategories = new Set();
 
 // ---------------- 数据层 ----------------
 
@@ -47,10 +48,9 @@ function seedDefaultEntry(settings) {
             id: generateId(),
             title: "示例·百物语",
             author: "苹果老师的天才构想",
-            category: "历史",
+            category: "刀剑乱舞",
             tags: ["习俗", "历史", "日常"],
-            content:
-                "现在停止角色扮演。请把时间线调整到{{user}}和{{char}}交往前的时间点，在这个背景下，如果{{user}}在深夜失眠、好奇着想尝试百物语的话，两人会怎么相处呢？/n请生成一个小剧场，内容是{{char}}和{{user}}的行动和相处。会是什么样的场景呢？会去现世的店、万屋的店、还是出阵时去当时历史的店？会涉及些什么有趣的内容呢？会不会发生一些很好玩的状况或者事后衍生出讨论和吐槽呢？需符合{{user}}和{{char}}的背景设定，请结合性格、背景故事、日常偏好、人际关系等展开情节，字数要求4000字以上，如果字数不够可以适当拉长，字数没有上限。",
+            content: "现在停止角色扮演。请把时间线调整到{{user}}和{{char}}交往前的时间点，在这个背景下，如果{{user}}在深夜失眠、好奇着想尝试百物语的话，两人会怎么相处呢？\n请生成一个小剧场，内容是{{char}}和{{user}}的行动和相处。会是什么样的场景呢？会去现世的店、万屋的店、还是出阵时去当时历史的店？会涉及些什么有趣的内容呢？会不会发生一些很好玩的状况或者事后衍生出讨论和吐槽呢？需符合{{user}}和{{char}}的背景设定，请结合性格、背景故事、日常偏好、人际关系等展开情节，字数要求4000字以上，如果字数不够可以适当拉长，字数没有上限。",
             createdAt: Date.now(),
             updatedAt: Date.now(),
         });
@@ -73,8 +73,17 @@ function panelHtml() {
             </div>
         </div>
         <div class="mt-toolbar">
-            <input id="mt_search" type="text" placeholder="搜索标题 / 内容 / 标签 / 作者..." />
-            <select id="mt_category_filter"><option value="">全部分类</option></select>
+            <div class="mt-search-bar">
+                <input id="mt_search" type="text" placeholder="搜索关键词..." />
+            </div>
+            <div class="mt-filters">
+                <select id="mt_category_filter" title="筛选分类"><option value="">全部分类</option></select>
+                <select id="mt_sort_order" title="排序方式">
+                    <option value="updated_desc">最近更新</option>
+                    <option value="created_desc">最早创建</option>
+                    <option value="title_asc">名称 (A-Z)</option>
+                </select>
+            </div>
         </div>
         <div id="mt_list" class="mt-list"></div>
         <input id="mt_import_file" type="file" accept="application/json" style="display:none;" />
@@ -91,20 +100,45 @@ function panelHtml() {
                 </div>
                 <div>
                     <label>分类</label>
-                    <input id="mt_field_category" list="mt_category_list" type="text" placeholder="如：日常 / 约会 / 历史" />
+                    <input id="mt_field_category" list="mt_category_list" type="text" placeholder="如：日常 / 约会" />
                     <datalist id="mt_category_list"></datalist>
                 </div>
             </div>
             <label>标签（用逗号分隔）</label>
             <input id="mt_field_tags" type="text" placeholder="例如：服饰,历史,搞笑" />
             <label>正文内容</label>
-            <textarea id="mt_field_content" rows="10" placeholder="粘贴或输入小剧场文本，可包含 {{user}} / {{char}} 宏，发送时会自动替换"></textarea>
+            <textarea id="mt_field_content" rows="10" placeholder="文本内容..."></textarea>
             <div class="mt-editor-actions">
                 <button id="mt_save" class="menu_button">保存</button>
                 <button id="mt_cancel" class="menu_button">取消</button>
             </div>
         </div>
-    </div>`;
+    </div>
+    <style>
+        .mt-toolbar { display: flex; flex-direction: column; gap: 5px; padding: 10px; border-bottom: 1px solid var(--smart-line-color); }
+        .mt-filters { display: flex; gap: 5px; }
+        .mt-filters select { flex: 1; padding: 5px; background: var(--input-bg-color); color: var(--text-color); border: 1px solid var(--smart-line-color); border-radius: 4px; }
+        
+        .mt-category-group { margin-bottom: 10px; border: 1px solid var(--smart-line-color); border-radius: 8px; overflow: hidden; }
+        .mt-group-header { 
+            background: var(--nav-bar-color); 
+            padding: 8px 12px; 
+            cursor: pointer; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            font-weight: bold;
+            user-select: none;
+        }
+        .mt-group-header:hover { background: var(--button-highlight-color); }
+        .mt-group-header i { transition: transform 0.2s; }
+        .mt-group-header.collapsed i { transform: rotate(-90deg); }
+        .mt-group-content { display: block; }
+        .mt-group-content.hidden { display: none; }
+        .mt-item { border: none; border-bottom: 1px solid var(--smart-line-color); border-radius: 0; }
+        .mt-item:last-child { border-bottom: none; }
+    </style>
+    `;
 }
 
 function getAllCategories(settings) {
@@ -118,7 +152,6 @@ function getAllCategories(settings) {
 function updateCategoryOptions() {
     const settings = getSettings();
     const categories = getAllCategories(settings);
-
     const $filter = $("#mt_category_filter");
     const currentVal = $filter.val();
     $filter.empty().append(`<option value="">全部分类</option>`);
@@ -133,12 +166,14 @@ function updateCategoryOptions() {
 function renderList() {
     const settings = getSettings();
     const keyword = ($("#mt_search").val() || "").toString().trim().toLowerCase();
-    const category = $("#mt_category_filter").val();
+    const categoryFilter = $("#mt_category_filter").val();
+    const sortOrder = $("#mt_sort_order").val();
 
-    let entries = settings.entries.slice().sort((a, b) => b.updatedAt - a.updatedAt);
+    let entries = [...settings.entries];
 
-    if (category) {
-        entries = entries.filter((e) => e.category === category);
+    // 1. 过滤
+    if (categoryFilter) {
+        entries = entries.filter((e) => e.category === categoryFilter);
     }
     if (keyword) {
         entries = entries.filter((e) => {
@@ -149,63 +184,165 @@ function renderList() {
         });
     }
 
+    // 2. 排序
+    entries.sort((a, b) => {
+        if (sortOrder === "updated_desc") return b.updatedAt - a.updatedAt;
+        if (sortOrder === "created_desc") return a.createdAt - b.createdAt;
+        if (sortOrder === "title_asc") return a.title.localeCompare(b.title, 'zh-CN');
+        return 0;
+    });
+
+    // 3. 分组处理
+    const groups = {};
+    entries.forEach(entry => {
+        const cat = entry.category || "其他";
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(entry);
+    });
+
     const $list = $("#mt_list");
     $list.empty();
 
     if (entries.length === 0) {
-        $list.append(`<div class="mt-empty">没有找到匹配的小剧场，点右上角 ➕ 新增一个吧～</div>`);
+        $list.append(`<div class="mt-empty">没有找到匹配的小剧场～</div>`);
         return;
     }
 
-    entries.forEach((entry) => {
-        const previewRaw = entry.content.slice(0, 120).replace(/\n/g, " ");
-        const preview = escapeHtml(previewRaw);
-        const tags = (entry.tags || []).map((t) => `<span class="mt-tag">#${escapeHtml(t)}</span>`).join(" ");
-        const date = new Date(entry.updatedAt).toLocaleDateString();
-        $list.append(`
-            <div class="mt-item" data-id="${entry.id}">
-                <div class="mt-item-head">
-                    <strong>${escapeHtml(entry.title)}</strong>
-                    <span class="mt-badge">${escapeHtml(entry.category || "未分类")}</span>
+    // 4. 渲染分组
+    Object.keys(groups).sort().forEach(catName => {
+        const catEntries = groups[catName];
+        const isCollapsed = collapsedCategories.has(catName);
+        
+        const $group = $(`
+            <div class="mt-category-group">
+                <div class="mt-group-header ${isCollapsed ? 'collapsed' : ''}" data-cat="${escapeHtml(catName)}">
+                    <span><i class="fa-solid fa-chevron-down"></i> ${escapeHtml(catName)} (${catEntries.length})</span>
                 </div>
-                <div class="mt-item-meta">作者：${escapeHtml(entry.author || "匿名")} · ${date} ${tags}</div>
-                <div class="mt-item-preview">${preview}${entry.content.length > 120 ? "…" : ""}</div>
-                <div class="mt-item-actions">
-                    <button class="menu_button mt-send" title="直接发送"><i class="fa-solid fa-paper-plane"></i> 发送</button>
-                    <button class="menu_button mt-insert" title="插入到输入框"><i class="fa-solid fa-arrow-turn-down"></i> 插入</button>
-                    <button class="menu_button mt-copy" title="复制到剪贴板"><i class="fa-solid fa-copy"></i></button>
-                    <button class="menu_button mt-edit" title="编辑"><i class="fa-solid fa-pen"></i></button>
-                    <button class="menu_button mt-delete" title="删除"><i class="fa-solid fa-trash"></i></button>
-                </div>
+                <div class="mt-group-content ${isCollapsed ? 'hidden' : ''}"></div>
             </div>
         `);
+
+        const $content = $group.find(".mt-group-content");
+
+        catEntries.forEach((entry) => {
+            const previewRaw = entry.content.slice(0, 100).replace(/\n/g, " ");
+            const preview = escapeHtml(previewRaw);
+            const tags = (entry.tags || []).map((t) => `<span class="mt-tag">#${escapeHtml(t)}</span>`).join(" ");
+            const date = new Date(entry.updatedAt).toLocaleDateString();
+            
+            $content.append(`
+                <div class="mt-item" data-id="${entry.id}">
+                    <div class="mt-item-head">
+                        <strong>${escapeHtml(entry.title)}</strong>
+                    </div>
+                    <div class="mt-item-meta">${escapeHtml(entry.author || "匿名")} · ${date} ${tags}</div>
+                    <div class="mt-item-preview">${preview}${entry.content.length > 100 ? "…" : ""}</div>
+                    <div class="mt-item-actions">
+                        <button class="menu_button mt-send" title="直接发送"><i class="fa-solid fa-paper-plane"></i></button>
+                        <button class="menu_button mt-insert" title="插入"><i class="fa-solid fa-arrow-turn-down"></i></button>
+                        <button class="menu_button mt-copy" title="复制"><i class="fa-solid fa-copy"></i></button>
+                        <button class="menu_button mt-edit" title="编辑"><i class="fa-solid fa-pen"></i></button>
+                        <button class="menu_button mt-delete" title="删除"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            `);
+        });
+
+        $list.append($group);
     });
 }
 
-// ---------------- 发送/插入 ----------------
+// ---------------- 事件绑定 ----------------
+
+function bindEvents() {
+    $(document).on("click", "#mt_close, #mt_overlay", () => {
+        $("#mini_theater_panel, #mt_overlay").removeClass("mt-show");
+    });
+
+    $(document).on("click", "#mt_add", () => openEditor(null));
+    $(document).on("click", "#mt_cancel", closeEditor);
+    $(document).on("click", "#mt_save", saveEditor);
+
+    $(document).on("input", "#mt_search", renderList);
+    $(document).on("change", "#mt_category_filter, #mt_sort_order", renderList);
+
+    // 折叠事件
+    $(document).on("click", ".mt-group-header", function() {
+        const catName = $(this).data("cat");
+        const $content = $(this).next(".mt-group-content");
+        
+        if (collapsedCategories.has(catName)) {
+            collapsedCategories.delete(catName);
+            $content.removeClass("hidden");
+            $(this).removeClass("collapsed");
+        } else {
+            collapsedCategories.add(catName);
+            $content.addClass("hidden");
+            $(this).addClass("collapsed");
+        }
+    });
+
+    // 功能按钮 (发送、插入、复制、编辑、删除)
+    $(document).on("click", ".mt-item .mt-send", function () {
+        const id = $(this).closest(".mt-item").data("id");
+        const entry = getSettings().entries.find((x) => x.id === id);
+        if (entry) sendToChat(entry.content, true);
+    });
+
+    $(document).on("click", ".mt-item .mt-insert", function () {
+        const id = $(this).closest(".mt-item").data("id");
+        const entry = getSettings().entries.find((x) => x.id === id);
+        if (entry) sendToChat(entry.content, false);
+    });
+
+    $(document).on("click", ".mt-item .mt-copy", function () {
+        const id = $(this).closest(".mt-item").data("id");
+        const entry = getSettings().entries.find((x) => x.id === id);
+        if (entry) {
+            navigator.clipboard.writeText(entry.content)
+                .then(() => toastr.success("已复制"))
+                .catch(() => toastr.error("复制失败"));
+        }
+    });
+
+    $(document).on("click", ".mt-item .mt-edit", function () {
+        const id = $(this).closest(".mt-item").data("id");
+        const entry = getSettings().entries.find((x) => x.id === id);
+        if (entry) openEditor(entry);
+    });
+
+    $(document).on("click", ".mt-item .mt-delete", function () {
+        const id = $(this).closest(".mt-item").data("id");
+        if (!confirm("确定删除吗？")) return;
+        const settings = getSettings();
+        settings.entries = settings.entries.filter((x) => x.id !== id);
+        persist();
+        renderList();
+    });
+
+    // 导入导出
+    $(document).on("click", "#mt_export", exportEntries);
+    $(document).on("click", "#mt_import", () => $("#mt_import_file").trigger("click"));
+    $(document).on("change", "#mt_import_file", (e) => {
+        const file = e.target.files[0];
+        if (file) importEntries(file);
+        e.target.value = "";
+    });
+}
+
+// ---------------- 辅助功能 ----------------
 
 function sendToChat(text, autoSend) {
     const textarea = document.getElementById("send_textarea");
-    if (!textarea) {
-        toastr.error("未找到聊天输入框，请确认当前处于聊天界面");
-        return;
-    }
+    if (!textarea) return toastr.error("未找到输入框");
     textarea.value = text;
     $(textarea).trigger("input").trigger("change");
-
     if (autoSend) {
-        setTimeout(() => {
-            const sendBtn = document.getElementById("send_but");
-            if (sendBtn) sendBtn.click();
-        }, 50);
-        toastr.success("已发送");
+        setTimeout(() => { $("#send_but").click(); }, 50);
     } else {
         textarea.focus();
-        toastr.success("已插入到输入框，请检查后发送");
     }
 }
-
-// ---------------- 编辑器 ----------------
 
 function openEditor(entry) {
     currentEditId = entry ? entry.id : null;
@@ -225,50 +362,34 @@ function closeEditor() {
 }
 
 function saveEditor() {
-    const title = $("#mt_field_title").val().toString().trim();
-    const content = $("#mt_field_content").val().toString().trim();
-    if (!title || !content) {
-        toastr.warning("标题和正文都不能为空哦");
-        return;
-    }
-    const author = $("#mt_field_author").val().toString().trim() || "匿名";
-    const category = $("#mt_field_category").val().toString().trim() || "其他";
-    const tags = $("#mt_field_tags")
-        .val()
-        .toString()
-        .split(/[,，]/)
-        .map((t) => t.trim())
-        .filter(Boolean);
-
+    const title = $("#mt_field_title").val().trim();
+    const content = $("#mt_field_content").val().trim();
+    if (!title || !content) return toastr.warning("请填写完整");
+    
     const settings = getSettings();
     const now = Date.now();
+    const entryData = {
+        title,
+        content,
+        author: $("#mt_field_author").val().trim() || "匿名",
+        category: $("#mt_field_category").val().trim() || "其他",
+        tags: $("#mt_field_tags").val().split(/[,，]/).map(t => t.trim()).filter(Boolean),
+        updatedAt: now
+    };
 
     if (currentEditId) {
-        const entry = settings.entries.find((e) => e.id === currentEditId);
-        if (entry) {
-            Object.assign(entry, { title, author, category, tags, content, updatedAt: now });
-        }
+        const entry = settings.entries.find(e => e.id === currentEditId);
+        if (entry) Object.assign(entry, entryData);
     } else {
-        settings.entries.push({
-            id: generateId(),
-            title,
-            author,
-            category,
-            tags,
-            content,
-            createdAt: now,
-            updatedAt: now,
-        });
+        settings.entries.push({ id: generateId(), createdAt: now, ...entryData });
     }
 
     persist();
     closeEditor();
     updateCategoryOptions();
     renderList();
-    toastr.success("已保存");
+    toastr.success("保存成功");
 }
-
-// ---------------- 导入 / 导出 ----------------
 
 function exportEntries() {
     const settings = getSettings();
@@ -276,11 +397,8 @@ function exportEntries() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `mini_theater_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
+    a.download = `mini_theater_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
 }
 
 function importEntries(file) {
@@ -288,105 +406,18 @@ function importEntries(file) {
     reader.onload = () => {
         try {
             const data = JSON.parse(reader.result);
-            if (!Array.isArray(data)) throw new Error("格式不正确");
             const settings = getSettings();
-            let count = 0;
-            data.forEach((item) => {
-                if (item && item.title && item.content) {
-                    settings.entries.push({
-                        id: generateId(),
-                        title: String(item.title),
-                        author: String(item.author || "匿名"),
-                        category: String(item.category || "其他"),
-                        tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
-                        content: String(item.content),
-                        createdAt: item.createdAt || Date.now(),
-                        updatedAt: Date.now(),
-                    });
-                    count++;
+            data.forEach(item => {
+                if (item.title && item.content) {
+                    settings.entries.push({ ...item, id: generateId(), updatedAt: Date.now() });
                 }
             });
             persist();
-            updateCategoryOptions();
             renderList();
-            toastr.success(`成功导入 ${count} 条小剧场`);
-        } catch (e) {
-            toastr.error("导入失败：文件格式不正确");
-        }
+            toastr.success("导入完成");
+        } catch (e) { toastr.error("格式错误"); }
     };
     reader.readAsText(file);
-}
-
-// ---------------- 事件绑定 ----------------
-
-function bindEvents() {
-    $(document).on("click", "#mt_close, #mt_overlay", () => {
-        $("#mini_theater_panel, #mt_overlay").removeClass("mt-show");
-    });
-
-    $(document).on("click", "#mt_add", () => openEditor(null));
-    $(document).on("click", "#mt_cancel", closeEditor);
-    $(document).on("click", "#mt_save", saveEditor);
-
-    // 手机上点某个输入框时，键盘弹出前后延迟一下再把该输入框滚动到可视区域中央，
-    // 避免被键盘挡住或钉在屏幕外够不着。
-    $(document).on("focus", "#mini_theater_editor input, #mini_theater_editor textarea", function () {
-        const el = this;
-        setTimeout(() => {
-            el.scrollIntoView({ block: "center", behavior: "smooth" });
-        }, 300);
-    });
-
-    $(document).on("input", "#mt_search", renderList);
-    $(document).on("change", "#mt_category_filter", renderList);
-
-    $(document).on("click", "#mt_export", exportEntries);
-    $(document).on("click", "#mt_import", () => $("#mt_import_file").trigger("click"));
-    $(document).on("change", "#mt_import_file", (e) => {
-        const file = e.target.files[0];
-        if (file) importEntries(file);
-        e.target.value = "";
-    });
-
-    $(document).on("click", ".mt-item .mt-send", function () {
-        const id = $(this).closest(".mt-item").data("id");
-        const entry = getSettings().entries.find((x) => x.id === id);
-        if (entry) sendToChat(entry.content, true);
-    });
-
-    $(document).on("click", ".mt-item .mt-insert", function () {
-        const id = $(this).closest(".mt-item").data("id");
-        const entry = getSettings().entries.find((x) => x.id === id);
-        if (entry) sendToChat(entry.content, false);
-    });
-
-    $(document).on("click", ".mt-item .mt-copy", function () {
-        const id = $(this).closest(".mt-item").data("id");
-        const entry = getSettings().entries.find((x) => x.id === id);
-        if (entry) {
-            navigator.clipboard
-                .writeText(entry.content)
-                .then(() => toastr.success("已复制到剪贴板"))
-                .catch(() => toastr.error("复制失败，请手动选择文本复制"));
-        }
-    });
-
-    $(document).on("click", ".mt-item .mt-edit", function () {
-        const id = $(this).closest(".mt-item").data("id");
-        const entry = getSettings().entries.find((x) => x.id === id);
-        if (entry) openEditor(entry);
-    });
-
-    $(document).on("click", ".mt-item .mt-delete", function () {
-        const id = $(this).closest(".mt-item").data("id");
-        if (!confirm("确定要删除这条小剧场吗？此操作无法撤销。")) return;
-        const settings = getSettings();
-        settings.entries = settings.entries.filter((x) => x.id !== id);
-        persist();
-        updateCategoryOptions();
-        renderList();
-        toastr.success("已删除");
-    });
 }
 
 function openPanel() {

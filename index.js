@@ -9,10 +9,9 @@ import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
 
 const MODULE_NAME = "mini_theater_vault";
-const DEFAULT_CATEGORIES = ["日常", "约会", "历史", "节日", "任务", "其他"];
 
 let currentEditId = null;
-let collapsedCategories = new Set();
+let expandedCategories = new Set(); // 改为记录"已展开"的分类，默认全部折叠
 let batchMode = false;
 let selectedIds = new Set();
 
@@ -311,8 +310,9 @@ function panelHtml() {
     </div>`;
 }
 
+// 不再预设默认分类，只从用户已有条目中收集
 function getAllCategories(settings) {
-    const set = new Set(DEFAULT_CATEGORIES);
+    const set = new Set();
     settings.entries.forEach((e) => {
         if (e.category) set.add(e.category);
     });
@@ -487,7 +487,8 @@ function renderList() {
 
     groupNames.forEach((cat) => {
         const catEntries = groups[cat];
-        const isCollapsed = collapsedCategories.has(cat);
+        // 默认折叠！只有用户点过的分类才会展开
+        const isCollapsed = !expandedCategories.has(cat);
         const itemsHtml = catEntries.map((e) => renderEntryCard(e)).join("");
 
         $list.append(`
@@ -665,16 +666,16 @@ function bindEvents() {
     $(document).on("change", "#mt_category_filter", renderList);
     $(document).on("change", "#mt_sort", renderList);
 
-    // 分类折叠/展开
+    // 分类折叠/展开 —— 默认折叠，点击展开
     $(document).on("click", ".mt-group-header", function () {
         const $group = $(this).closest(".mt-group");
         const cat = $group.data("category");
         if ($group.hasClass("collapsed")) {
             $group.removeClass("collapsed");
-            collapsedCategories.delete(cat);
+            expandedCategories.add(cat);
         } else {
             $group.addClass("collapsed");
-            collapsedCategories.add(cat);
+            expandedCategories.delete(cat);
         }
     });
 

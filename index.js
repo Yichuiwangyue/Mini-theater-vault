@@ -174,7 +174,7 @@ function injectStyles() {
             font-size: 0.9em;
         }
 
-        /* 分类折叠 */
+               /* 分类折叠 */
         .mt-group { margin-bottom: 10px; }
         .mt-group-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -197,22 +197,21 @@ function injectStyles() {
         .mt-group.collapsed .mt-group-arrow { transform: rotate(-90deg); }
 
         .mt-group-items {
-            display: grid;
-            grid-template-rows: 1fr;
-            transition: grid-template-rows 0.35s ease, opacity 0.3s ease, padding 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 5000px;
+            overflow: hidden;
+            transition: max-height 0.35s ease-out, opacity 0.3s ease, padding 0.3s ease, gap 0.35s ease;
             opacity: 1;
             padding: 8px 4px;
-            gap: 8px;
         }
         .mt-group.collapsed .mt-group-items {
-            grid-template-rows: 0fr;
+            max-height: 0;
             opacity: 0;
             padding-top: 0;
             padding-bottom: 0;
-        }
-        .mt-group-items > .mt-item {
-            overflow: hidden;
-            min-height: 0;
+            gap: 0;
         }
 
         /* 批量复选框 */

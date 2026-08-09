@@ -1,6 +1,5 @@
 // ============================================================
-// 小剧场收藏夹 Mini Theater Vault (Bug Fixed Version)
-// 一个 SillyTavern 第三方扩展
+// 小剧场收藏夹 Mini Theater Vault (Optimized V2)
 // ============================================================
 
 import { extension_settings } from "../../../extensions.js";
@@ -10,8 +9,7 @@ const MODULE_NAME = "mini_theater_vault";
 const DEFAULT_CATEGORIES = ["日常", "约会", "历史", "节日", "任务", "其他"];
 
 let currentEditId = null;
-// 记录折叠状态
-let collapsedCategories = new Set();
+let collapsedCategories = new Set(); // 记录折叠状态
 
 // ---------------- 数据层 ----------------
 
@@ -46,10 +44,10 @@ function seedDefaultEntry(settings) {
     if (settings.entries.length === 0) {
         settings.entries.push({
             id: generateId(),
-            title: "示例·百物语",
-            author: "苹果老师的天才构想",
-            category: "刀剑乱舞",
-            tags: ["习俗", "历史", "日常"],
+            title: "示例·平安时期的服饰",
+            author: "系统示例",
+            category: "历史",
+            tags: ["服饰", "历史", "日常"],
             content: "现在停止角色扮演。请把时间线调整到{{user}}和{{char}}交往前的时间点...",
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -73,7 +71,7 @@ function panelHtml() {
             </div>
         </div>
         <div class="mt-toolbar">
-            <div class="mt-search-container">
+            <div class="mt-search-row">
                 <input id="mt_search" type="text" placeholder="搜索标题 / 内容 / 标签 / 作者..." />
             </div>
             <div class="mt-filter-row">
@@ -88,6 +86,8 @@ function panelHtml() {
         <div id="mt_list" class="mt-list"></div>
         <input id="mt_import_file" type="file" accept="application/json" style="display:none;" />
     </div>
+
+    <!-- 编辑器弹窗 -->
     <div id="mini_theater_editor" class="mt-editor">
         <div class="mt-editor-inner">
             <h3 id="mt_editor_title">新增小剧场</h3>
@@ -104,7 +104,7 @@ function panelHtml() {
                     <datalist id="mt_category_list"></datalist>
                 </div>
             </div>
-            <label>标签（用逗号分隔）</label>
+            <label>标签 (逗号分隔)</label>
             <input id="mt_field_tags" type="text" />
             <label>正文内容</label>
             <textarea id="mt_field_content" rows="10"></textarea>
@@ -114,53 +114,48 @@ function panelHtml() {
             </div>
         </div>
     </div>
+
     <style>
         /* 布局修复 */
-        #mini_theater_panel { display: flex; flex-direction: column; max-height: 90vh; }
+        .mt-panel { display: flex; flex-direction: column; max-height: 90vh; }
         .mt-toolbar { padding: 10px; border-bottom: 1px solid var(--smart-line-color); flex-shrink: 0; }
-        .mt-search-container { margin-bottom: 8px; }
-        .mt-filter-row { display: flex; gap: 8px; }
-        .mt-filter-row select { flex: 1; padding: 5px; background: var(--input-bg-color); color: var(--text-color); border: 1px solid var(--smart-line-color); border-radius: 5px; }
+        .mt-search-row input { width: 100%; margin-bottom: 8px; }
+        .mt-filter-row { display: flex; gap: 10px; }
+        .mt-filter-row select { flex: 1; }
 
-        /* 列表滚动修复 */
+        /* 列表区域滚动修复 */
         .mt-list { flex: 1; overflow-y: auto; padding: 10px; min-height: 0; }
         
-        /* 分类折叠样式修复 */
-        .mt-category-group { margin-bottom: 10px; border: 1px solid var(--smart-line-color); border-radius: 8px; background: rgba(0,0,0,0.1); }
+        /* 分组样式 */
+        .mt-category-group { margin-bottom: 10px; }
         .mt-group-header { 
-            padding: 10px 15px; 
-            cursor: pointer; 
-            font-weight: bold; 
-            display: flex; 
-            align-items: center; 
-            gap: 10px;
-            background: var(--nav-bar-color);
+            background: rgba(0,0,0,0.1); 
+            padding: 8px 12px; 
             border-radius: 8px;
+            cursor: pointer; 
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
         }
-        .mt-group-header:hover { opacity: 0.8; }
-        .mt-group-header.collapsed { border-radius: 8px; }
-        .mt-group-header i { transition: transform 0.2s; }
+        .mt-group-header i { margin-right: 8px; transition: 0.2s; }
         .mt-group-header.collapsed i { transform: rotate(-90deg); }
-        
-        .mt-group-content { display: block; padding-top: 5px; }
+        .mt-group-content { display: block; }
         .mt-group-content.hidden { display: none; }
 
-        /* 条目内部样式复原 */
-        .mt-item { 
-            background: var(--bg-color); 
-            margin: 8px; 
-            padding: 12px; 
-            border-radius: 8px; 
-            border: 1px solid var(--smart-line-color);
-            position: relative; 
-        }
+        /* 卡片内分类标签 (Badge) */
+        .mt-item { position: relative; }
+        .mt-item-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px; padding-right: 60px; }
         .mt-badge { 
-            font-size: 0.8em; 
-            background: var(--button-highlight-color); 
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: #8b0000; 
             color: white; 
             padding: 2px 8px; 
             border-radius: 10px; 
-            float: right;
+            font-size: 11px;
+            font-weight: normal;
         }
     </style>
     `;
@@ -196,15 +191,14 @@ function renderList() {
 
     let entries = [...settings.entries];
 
-    // 1. 过滤：只对比字段 category
+    // 1. 过滤逻辑：categoryFilter 只匹配 category 字段
     if (categoryFilter) {
         entries = entries.filter((e) => e.category === categoryFilter);
     }
     if (keyword) {
         entries = entries.filter((e) => {
             const hay = [e.title, e.author, e.category, e.content, (e.tags || []).join(",")]
-                .join(" ")
-                .toLowerCase();
+                .join(" ").toLowerCase();
             return hay.includes(keyword);
         });
     }
@@ -217,7 +211,7 @@ function renderList() {
         return 0;
     });
 
-    // 3. 按 Category 分组
+    // 3. 分组（纯 Category 分组）
     const groups = {};
     entries.forEach(entry => {
         const cat = entry.category || "其他";
@@ -229,7 +223,7 @@ function renderList() {
     $list.empty();
 
     if (entries.length === 0) {
-        $list.append(`<div class="mt-empty">没有找到匹配的小剧场～</div>`);
+        $list.append(`<div class="mt-empty">没找到内容哦</div>`);
         return;
     }
 
@@ -241,8 +235,7 @@ function renderList() {
         const $group = $(`
             <div class="mt-category-group">
                 <div class="mt-group-header ${isCollapsed ? 'collapsed' : ''}" data-cat="${escapeHtml(catName)}">
-                    <i class="fa-solid fa-chevron-down"></i>
-                    <span>${escapeHtml(catName)} (${catEntries.length})</span>
+                    <i class="fa-solid fa-chevron-down"></i> ${escapeHtml(catName)} (${catEntries.length})
                 </div>
                 <div class="mt-group-content ${isCollapsed ? 'hidden' : ''}"></div>
             </div>
@@ -251,25 +244,24 @@ function renderList() {
         const $content = $group.find(".mt-group-content");
 
         catEntries.forEach((entry) => {
-            const previewRaw = entry.content.slice(0, 120).replace(/\n/g, " ");
-            const preview = escapeHtml(previewRaw);
+            const preview = escapeHtml(entry.content.slice(0, 100).replace(/\n/g, " "));
             const tags = (entry.tags || []).map((t) => `<span class="mt-tag">#${escapeHtml(t)}</span>`).join(" ");
             const date = new Date(entry.updatedAt).toLocaleDateString();
             
             $content.append(`
                 <div class="mt-item" data-id="${entry.id}">
                     <div class="mt-item-head">
-                        <span class="mt-badge">${escapeHtml(entry.category || "未分类")}</span>
                         <strong>${escapeHtml(entry.title)}</strong>
+                        <span class="mt-badge">${escapeHtml(entry.category || "其他")}</span>
                     </div>
                     <div class="mt-item-meta">${escapeHtml(entry.author || "匿名")} · ${date} ${tags}</div>
-                    <div class="mt-item-preview">${preview}${entry.content.length > 120 ? "…" : ""}</div>
+                    <div class="mt-item-preview">${preview}${entry.content.length > 100 ? "…" : ""}</div>
                     <div class="mt-item-actions">
-                        <button class="menu_button mt-send" title="发送"><i class="fa-solid fa-paper-plane"></i> 发送</button>
-                        <button class="menu_button mt-insert" title="插入"><i class="fa-solid fa-arrow-turn-down"></i> 插入</button>
-                        <button class="menu_button mt-copy" title="复制"><i class="fa-solid fa-copy"></i></button>
-                        <button class="menu_button mt-edit" title="编辑"><i class="fa-solid fa-pen"></i></button>
-                        <button class="menu_button mt-delete" title="删除"><i class="fa-solid fa-trash"></i></button>
+                        <button class="menu_button mt-send"><i class="fa-solid fa-paper-plane"></i> 发送</button>
+                        <button class="menu_button mt-insert"><i class="fa-solid fa-arrow-turn-down"></i> 插入</button>
+                        <button class="menu_button mt-copy"><i class="fa-solid fa-copy"></i></button>
+                        <button class="menu_button mt-edit"><i class="fa-solid fa-pen"></i></button>
+                        <button class="menu_button mt-delete"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
             `);
@@ -282,7 +274,20 @@ function renderList() {
 // ---------------- 事件绑定 ----------------
 
 function bindEvents() {
-    $(document).off("click", ".mt-group-header").on("click", ".mt-group-header", function() {
+    // 关闭逻辑 (保留)
+    $(document).on("click", "#mt_close, #mt_overlay", () => {
+        $("#mini_theater_panel, #mt_overlay").removeClass("mt-show");
+    });
+
+    $(document).on("click", "#mt_add", () => openEditor(null));
+    $(document).on("click", "#mt_cancel", closeEditor);
+    $(document).on("click", "#mt_save", saveEditor);
+
+    $(document).on("input", "#mt_search", renderList);
+    $(document).on("change", "#mt_category_filter, #mt_sort_order", renderList);
+
+    // 折叠切换
+    $(document).on("click", ".mt-group-header", function() {
         const catName = $(this).data("cat");
         const $content = $(this).next(".mt-group-content");
         
@@ -297,17 +302,7 @@ function bindEvents() {
         }
     });
 
-    $(document).on("click", "#mt_close, #mt_overlay", () => {
-        $("#mini_theater_panel, #mt_overlay").removeClass("mt-show");
-    });
-
-    $(document).on("click", "#mt_add", () => openEditor(null));
-    $(document).on("click", "#mt_cancel", closeEditor);
-    $(document).on("click", "#mt_save", saveEditor);
-
-    $(document).on("input", "#mt_search", renderList);
-    $(document).on("change", "#mt_category_filter, #mt_sort_order", renderList);
-
+    // 动作按钮
     $(document).on("click", ".mt-item .mt-send", function () {
         const id = $(this).closest(".mt-item").data("id");
         const entry = getSettings().entries.find((x) => x.id === id);
@@ -324,9 +319,7 @@ function bindEvents() {
         const id = $(this).closest(".mt-item").data("id");
         const entry = getSettings().entries.find((x) => x.id === id);
         if (entry) {
-            navigator.clipboard.writeText(entry.content)
-                .then(() => toastr.success("已复制到剪贴板"))
-                .catch(() => toastr.error("复制失败"));
+            navigator.clipboard.writeText(entry.content).then(() => toastr.success("已复制"));
         }
     });
 
@@ -338,11 +331,10 @@ function bindEvents() {
 
     $(document).on("click", ".mt-item .mt-delete", function () {
         const id = $(this).closest(".mt-item").data("id");
-        if (!confirm("确定要删除这条小剧场吗？")) return;
+        if (!confirm("确定删除吗？")) return;
         const settings = getSettings();
         settings.entries = settings.entries.filter((x) => x.id !== id);
         persist();
-        updateCategoryOptions();
         renderList();
     });
 
@@ -355,18 +347,14 @@ function bindEvents() {
     });
 }
 
-// ---------------- 辅助函数 ----------------
+// ---------------- 辅助 ----------------
 
 function sendToChat(text, autoSend) {
     const textarea = document.getElementById("send_textarea");
-    if (!textarea) return toastr.error("未找到输入框");
+    if (!textarea) return;
     textarea.value = text;
     $(textarea).trigger("input").trigger("change");
-    if (autoSend) {
-        setTimeout(() => { const btn = document.getElementById("send_but"); if (btn) btn.click(); }, 50);
-    } else {
-        textarea.focus();
-    }
+    if (autoSend) setTimeout(() => { $("#send_but").click(); }, 50);
 }
 
 function openEditor(entry) {
@@ -383,30 +371,28 @@ function openEditor(entry) {
 
 function closeEditor() {
     $("#mini_theater_editor").removeClass("mt-show");
-    currentEditId = null;
 }
 
 function saveEditor() {
     const title = $("#mt_field_title").val().trim();
     const content = $("#mt_field_content").val().trim();
-    if (!title || !content) return toastr.warning("标题和内容不能为空");
+    if (!title || !content) return toastr.warning("请填写标题和内容");
     
     const settings = getSettings();
-    const now = Date.now();
     const entryData = {
         title,
         content,
         author: $("#mt_field_author").val().trim() || "匿名",
         category: $("#mt_field_category").val().trim() || "其他",
         tags: $("#mt_field_tags").val().split(/[,，]/).map(t => t.trim()).filter(Boolean),
-        updatedAt: now
+        updatedAt: Date.now()
     };
 
     if (currentEditId) {
         const entry = settings.entries.find(e => e.id === currentEditId);
         if (entry) Object.assign(entry, entryData);
     } else {
-        settings.entries.push({ id: generateId(), createdAt: now, ...entryData });
+        settings.entries.push({ id: generateId(), createdAt: Date.now(), ...entryData });
     }
 
     persist();
@@ -422,7 +408,7 @@ function exportEntries() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `mini_theater_backup.json`;
+    a.download = `theater_vault_backup.json`;
     a.click();
 }
 
@@ -438,7 +424,6 @@ function importEntries(file) {
                 }
             });
             persist();
-            updateCategoryOptions();
             renderList();
             toastr.success("导入成功");
         } catch (e) { toastr.error("文件格式错误"); }

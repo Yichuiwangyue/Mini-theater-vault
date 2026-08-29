@@ -11,7 +11,7 @@ import { saveSettingsDebounced } from "../../../../script.js";
 const MODULE_NAME = "mini_theater_vault";
 
 let currentEditId = null;
-let expandedCategories = new Set(); // 改为记录"已展开"的分类，默认全部折叠
+let expandedGroups = new Set(); // 【改】重命名：语义变为"已展开的组"，不再限于分类
 let batchMode = false;
 let selectedIds = new Set();
 
@@ -284,6 +284,12 @@ function panelHtml() {
                 <option value="title_asc">名称 A-Z</option>
                 <option value="title_desc">名称 Z-A</option>
             </select>
+            <!-- 【新增】分组方式选择器 -->
+            <select id="mt_group_by" title="分组方式">
+                <option value="category">按分类分组</option>
+                <option value="author">按作者分组</option>
+                <option value="title">按标题分组</option>
+            </select>
         </div>
         <div id="mt_batch_bar" class="mt-batch-bar">
             <label class="mt-batch-label"><input type="checkbox" id="mt_select_all"> 全选当前</label>
@@ -486,24 +492,28 @@ function renderList() {
         return;
     }
 
-    // 按分类分组
+    // 【改】按选定字段分组（分类 / 作者 / 标题）
+    const groupBy = $("#mt_group_by").val() || "category";
     const groups = {};
     entries.forEach((e) => {
-        const cat = e.category || "未分类";
-        if (!groups[cat]) groups[cat] = [];
-        groups[cat].push(e);
+        let key;
+        if (groupBy === "title") key = e.title || "未命名";
+        else if (groupBy === "author") key = e.author || "匿名";
+        else key = e.category || "未分类";
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(e);
     });
 
-    // 分类顺序也跟随当前排序
+    // 【改】组顺序也跟随当前排序
     const groupNames = Object.keys(groups);
     groupNames.sort((ga, gb) => {
-        const aFirst = groups[ga][0];
-        const bFirst = groups[gb][0];
         let va, vb;
         if (sortKey === "title") {
             va = ga.toLowerCase();
             vb = gb.toLowerCase();
         } else {
+            const aFirst = groups[ga][0];
+            const bFirst = groups[gb][0];
             va = aFirst[sortKey] || 0;
             vb = bFirst[sortKey] || 0;
         }
@@ -512,20 +522,20 @@ function renderList() {
         return 0;
     });
 
-    groupNames.forEach((cat) => {
-        const catEntries = groups[cat];
-        // 默认折叠！只有用户点过的分类才会展开
-        const isCollapsed = !expandedCategories.has(cat);
-        const itemsHtml = catEntries.map((e) => renderEntryCard(e)).join("");
+    groupNames.forEach((groupKey) => {
+        const groupEntries = groups[groupKey];
+        // 默认折叠！只有用户点过的组才会展开
+        const isCollapsed = !expandedGroups.has(groupKey);
+        const itemsHtml = groupEntries.map((e) => renderEntryCard(e)).join("");
 
         $list.append(`
-            <div class="mt-group ${isCollapsed ? "collapsed" : ""}" data-category="${escapeHtml(cat)}">
+            <div class="mt-group ${isCollapsed ? "collapsed" : ""}" data-category="${escapeHtml(groupKey)}">
                 <div class="mt-group-header">
                     <span class="mt-group-title">
                         <i class="fa-solid fa-chevron-down mt-group-arrow"></i>
-                        <span>${escapeHtml(cat)}</span>
+                        <span>${escapeHtml(groupKey)}</span>
                     </span>
-                    <span class="mt-group-count">${catEntries.length} 条</span>
+                    <span class="mt-group-count">${groupEntries.length} 条</span>
                 </div>
                 <div class="mt-group-items">${itemsHtml}</div>
             </div>
@@ -692,17 +702,22 @@ function bindEvents() {
     $(document).on("input", "#mt_search", renderList);
     $(document).on("change", "#mt_category_filter", renderList);
     $(document).on("change", "#mt_sort", renderList);
+    // 【新增】切换分组方式
+    $(document).on("change", "#mt_group_by", function () {
+        expandedGroups.clear(); // 切换分组方式时重置展开状态
+        renderList();
+    });
 
-    // 分类折叠/展开 —— 默认折叠，点击展开
+    // 组折叠/展开 —— 默认折叠，点击展开 【改】变量名同步
     $(document).on("click", ".mt-group-header", function () {
         const $group = $(this).closest(".mt-group");
-        const cat = $group.data("category");
+        const groupKey = $group.data("category");
         if ($group.hasClass("collapsed")) {
             $group.removeClass("collapsed");
-            expandedCategories.add(cat);
+            expandedGroups.add(groupKey);
         } else {
             $group.addClass("collapsed");
-            expandedCategories.delete(cat);
+            expandedGroups.delete(groupKey);
         }
     });
 

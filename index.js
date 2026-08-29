@@ -1,7 +1,7 @@
 // ============================================================
 // 小剧场收藏夹 Mini Theater Vault
 // 一个 SillyTavern 第三方扩展：本地保存"小剧场"文本，
-// 支持作者标注、分类/标签/搜索/排序/折叠/内存查看/自定义阈值/批量删除，
+// 支持作者标注、分类/标签/搜索/排序/折叠/内存查看/自定义阈值/批量删除/收藏，
 // 并可一键插入或发送到聊天框。
 // ============================================================
 
@@ -11,7 +11,7 @@ import { saveSettingsDebounced } from "../../../../script.js";
 const MODULE_NAME = "mini_theater_vault";
 
 let currentEditId = null;
-let expandedGroups = new Set(); // 【改】重命名：语义变为"已展开的组"，不再限于分类
+let expandedGroups = new Set();
 let batchMode = false;
 let selectedIds = new Set();
 
@@ -61,6 +61,7 @@ function seedDefaultEntry(settings) {
                 "现在停止角色扮演。请把时间线调整到{{user}}和{{char}}交往前的时间点，在这个背景下，如果{{user}}在深夜失眠、好奇着想尝试百物语的话，两人会怎么相处呢？\n请生成一个小剧场，内容是{{char}}和{{user}}的行动和相处。会是什么样的场景呢？会去现世的店、万屋的店、还是出阵时去当时历史的店？会涉及些什么有趣的内容呢？会不会发生一些很好玩的状况或者事后衍生出讨论和吐槽呢？需符合{{user}}和{{char}}的背景设定，请结合性格、背景故事、日常偏好、人际关系等展开情节，字数要求4000字以上，如果字数不够可以适当拉长，字数没有上限。",
             createdAt: Date.now(),
             updatedAt: Date.now(),
+            favorite: false,
         });
     }
 }
@@ -174,7 +175,7 @@ function injectStyles() {
             font-size: 0.9em;
         }
 
-               /* 分类折叠 */
+        /* 分类折叠 */
         .mt-group { margin-bottom: 10px; }
         .mt-group-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -186,7 +187,9 @@ function injectStyles() {
         }
         .mt-group-header:hover { background: rgba(120,120,120,0.25); }
         .mt-group-header .mt-group-title {
-            display: flex; align-items: center; gap: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .mt-group-header .mt-group-count {
             font-size: 0.8em; opacity: 0.6; font-weight: 400;
@@ -253,6 +256,40 @@ function injectStyles() {
             margin-top: 4px;
             margin-bottom: 2px;
         }
+
+        /* 收藏按钮 */
+        .mt-item-title-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+        .mt-item-title-row strong {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .mt-favorite-btn {
+            background: none;
+            border: none;
+            padding: 2px 4px;
+            cursor: pointer;
+            color: rgba(180, 180, 180, 0.6);
+            font-size: 0.95em;
+            transition: color 0.2s, transform 0.15s;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        .mt-favorite-btn:hover {
+            color: rgba(230, 180, 60, 0.8);
+            transform: scale(1.15);
+        }
+        .mt-favorite-btn.active {
+            color: #e6a817;
+        }
+        .mt-favorite-btn.active:hover {
+            color: #d49a15;
+        }
     `;
     document.head.appendChild(style);
 }
@@ -283,12 +320,17 @@ function panelHtml() {
                 <option value="createdAt_asc">最早创建</option>
                 <option value="title_asc">名称 A-Z</option>
                 <option value="title_desc">名称 Z-A</option>
+                <option value="favorite_desc">收藏优先</option>
             </select>
-            <!-- 【新增】分组方式选择器 -->
             <select id="mt_group_by" title="分组方式">
                 <option value="category">按分类分组</option>
                 <option value="author">按作者分组</option>
                 <option value="title">按标题分组</option>
+            </select>
+            <select id="mt_favorite_filter" title="收藏筛选">
+                <option value="">全部</option>
+                <option value="favorite">已收藏</option>
+                <option value="unfavorite">未收藏</option>
             </select>
         </div>
         <div id="mt_batch_bar" class="mt-batch-bar">
@@ -422,12 +464,22 @@ function renderEntryCard(entry) {
     const checkbox = batchMode
         ? `<label class="mt-item-check"><input type="checkbox" class="mt-checkbox" value="${entry.id}" ${selectedIds.has(entry.id) ? "checked" : ""}></label>`
         : "";
+
+    const favoriteClass = entry.favorite ? "active" : "";
+    const favoriteIcon = entry.favorite ? "fa-solid fa-star" : "fa-regular fa-star";
+    const favoriteTitle = entry.favorite ? "取消收藏" : "收藏";
+
     return `
         <div class="mt-item ${batchClass}" data-id="${entry.id}">
             ${checkbox}
             <div class="mt-item-body" style="flex:1;min-width:0;">
                 <div class="mt-item-head">
-                    <strong>${escapeHtml(entry.title)}</strong>
+                    <div class="mt-item-title-row">
+                        <button class="mt-favorite-btn ${favoriteClass}" title="${favoriteTitle}">
+                            <i class="${favoriteIcon}"></i>
+                        </button>
+                        <strong>${escapeHtml(entry.title)}</strong>
+                    </div>
                     <span class="mt-badge">${escapeHtml(entry.category || "未分类")}</span>
                 </div>
                 <div class="mt-item-meta">作者：${escapeHtml(entry.author || "匿名")} · ${date}</div>
@@ -450,6 +502,7 @@ function renderList() {
     const keyword = ($("#mt_search").val() || "").toString().trim().toLowerCase();
     const category = $("#mt_category_filter").val();
     const sortMode = $("#mt_sort").val() || "updatedAt_desc";
+    const favoriteFilter = $("#mt_favorite_filter").val();
 
     let entries = settings.entries.slice();
 
@@ -465,22 +518,36 @@ function renderList() {
             return hay.includes(keyword);
         });
     }
+    if (favoriteFilter === "favorite") {
+        entries = entries.filter((e) => e.favorite);
+    } else if (favoriteFilter === "unfavorite") {
+        entries = entries.filter((e) => !e.favorite);
+    }
 
     // 排序
-    const [sortKey, sortDir] = sortMode.split("_");
-    entries.sort((a, b) => {
-        let va, vb;
-        if (sortKey === "title") {
-            va = (a.title || "").toLowerCase();
-            vb = (b.title || "").toLowerCase();
-        } else {
-            va = a[sortKey] || 0;
-            vb = b[sortKey] || 0;
-        }
-        if (va < vb) return sortDir === "asc" ? -1 : 1;
-        if (va > vb) return sortDir === "asc" ? 1 : -1;
-        return 0;
-    });
+    if (sortMode === "favorite_desc") {
+        entries.sort((a, b) => {
+            const fa = a.favorite ? 1 : 0;
+            const fb = b.favorite ? 1 : 0;
+            if (fa !== fb) return fb - fa;
+            return (b.updatedAt || 0) - (a.updatedAt || 0);
+        });
+    } else {
+        const [sortKey, sortDir] = sortMode.split("_");
+        entries.sort((a, b) => {
+            let va, vb;
+            if (sortKey === "title") {
+                va = (a.title || "").toLowerCase();
+                vb = (b.title || "").toLowerCase();
+            } else {
+                va = a[sortKey] || 0;
+                vb = b[sortKey] || 0;
+            }
+            if (va < vb) return sortDir === "asc" ? -1 : 1;
+            if (va > vb) return sortDir === "asc" ? 1 : -1;
+            return 0;
+        });
+    }
 
     const $list = $("#mt_list");
     $list.empty();
@@ -492,7 +559,6 @@ function renderList() {
         return;
     }
 
-    // 【改】按选定字段分组（分类 / 作者 / 标题）
     const groupBy = $("#mt_group_by").val() || "category";
     const groups = {};
     entries.forEach((e) => {
@@ -504,8 +570,8 @@ function renderList() {
         groups[key].push(e);
     });
 
-    // 【改】组顺序也跟随当前排序
     const groupNames = Object.keys(groups);
+    const [sortKey, sortDir] = sortMode.split("_");
     groupNames.sort((ga, gb) => {
         let va, vb;
         if (sortKey === "title") {
@@ -524,7 +590,6 @@ function renderList() {
 
     groupNames.forEach((groupKey) => {
         const groupEntries = groups[groupKey];
-        // 默认折叠！只有用户点过的组才会展开
         const isCollapsed = !expandedGroups.has(groupKey);
         const itemsHtml = groupEntries.map((e) => renderEntryCard(e)).join("");
 
@@ -622,6 +687,7 @@ function saveEditor() {
             content,
             createdAt: now,
             updatedAt: now,
+            favorite: false,
         });
     }
 
@@ -666,6 +732,7 @@ function importEntries(file) {
                         content: String(item.content),
                         createdAt: item.createdAt || Date.now(),
                         updatedAt: Date.now(),
+                        favorite: Boolean(item.favorite),
                     });
                     count++;
                 }
@@ -702,13 +769,12 @@ function bindEvents() {
     $(document).on("input", "#mt_search", renderList);
     $(document).on("change", "#mt_category_filter", renderList);
     $(document).on("change", "#mt_sort", renderList);
-    // 【新增】切换分组方式
+    $(document).on("change", "#mt_favorite_filter", renderList);
     $(document).on("change", "#mt_group_by", function () {
-        expandedGroups.clear(); // 切换分组方式时重置展开状态
+        expandedGroups.clear();
         renderList();
     });
 
-    // 组折叠/展开 —— 默认折叠，点击展开 【改】变量名同步
     $(document).on("click", ".mt-group-header", function () {
         const $group = $(this).closest(".mt-group");
         const groupKey = $group.data("category");
@@ -718,6 +784,21 @@ function bindEvents() {
         } else {
             $group.addClass("collapsed");
             expandedGroups.delete(groupKey);
+        }
+    });
+
+    // 收藏按钮
+    $(document).on("click", ".mt-favorite-btn", function (e) {
+        e.stopPropagation();
+        const id = $(this).closest(".mt-item").data("id");
+        const settings = getSettings();
+        const entry = settings.entries.find((x) => x.id === id);
+        if (entry) {
+            entry.favorite = !entry.favorite;
+            entry.updatedAt = Date.now();
+            persist();
+            renderList();
+            toastr.success(entry.favorite ? "已收藏" : "已取消收藏");
         }
     });
 

@@ -127,18 +127,17 @@
     padding: 30px 10px;
 }
 
+/* ==================== 编辑器弹窗（核心修改区） ==================== */
 .mt-editor {
     display: none;
     position: fixed;
     inset: 0;
     z-index: 10000;
     background: rgba(0, 0, 0, 0.6);
-    /* 关键修复：外层整体可滚动，而不是用 flex 居中把内容框钉死在屏幕正中间。
-       手机键盘弹出后可视区域变矮，居中会把顶部（标题栏）顶到看不见/够不到的地方。
-       改成这里滚动，键盘弹出时也能拖到最顶部。 */
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 24px 12px 40vh 12px;
+    /* 【改】去掉 40vh 底部大留白，统一 12px */
+    padding: 12px;
     box-sizing: border-box;
 }
 .mt-editor.mt-show {
@@ -187,4 +186,20 @@
     justify-content: flex-end;
     gap: 8px;
     margin-top: 16px;
+}
+
+/* ==================== 移动端全屏优化（新增） ==================== */
+@media (max-width: 640px) {
+    .mt-editor {
+        padding: 0;               /* 去掉外框留白，直接贴边 */
+    }
+    .mt-editor-inner {
+        width: 100%;              /* 撑满宽度 */
+        min-height: 100vh;        /* 撑满整屏高度 */
+        margin: 0;                /* 去掉 auto 居中 */
+        border-radius: 0;         /* 去掉圆角，更沉浸 */
+        border-left: none;
+        border-right: none;
+        padding: 16px;
+    }
 }

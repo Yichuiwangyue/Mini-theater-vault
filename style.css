@@ -127,18 +127,25 @@
     padding: 30px 10px;
 }
 
-/* ==================== 编辑器弹窗（核心修改区） ==================== */
 .mt-editor {
     display: none;
     position: fixed;
     inset: 0;
     z-index: 10000;
     background: rgba(0, 0, 0, 0.6);
+    /* 关键修复：外层整体可滚动。手机键盘弹出后可视区域变矮，
+       使用 min-height: 100dvh 确保滚动区域始终覆盖当前视口，
+       配合合理的 padding，避免内容被挤到上半屏。 */
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    /* 【改】去掉 40vh 底部大留白，统一 12px */
-    padding: 12px;
+    /* 修改：去掉底部 40vh 的巨大空白，改用更合理的 padding，
+       让弹窗在移动端看起来更居中、更自然 */
+    padding: 5vh 12px 15vh 12px;
     box-sizing: border-box;
+    /* 新增：动态视口高度，键盘弹出时自动适应，保证能滚动到底 */
+    min-height: 100vh;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
 }
 .mt-editor.mt-show {
     display: block;
@@ -146,6 +153,8 @@
 .mt-editor-inner {
     width: min(560px, 92vw);
     margin: 0 auto;
+    /* 新增：内容较少时，让弹窗在垂直方向上不至于贴顶，视觉更舒适 */
+    margin-top: 2vh;
     background: var(--SmartThemeBlurTintColor, #1e1e1e);
     color: var(--SmartThemeBodyColor, #eee);
     border: 1px solid var(--SmartThemeBorderColor, #555);
@@ -188,18 +197,42 @@
     margin-top: 16px;
 }
 
-/* ==================== 移动端全屏优化（新增） ==================== */
+/* ========== 移动端专项优化 ========== */
 @media (max-width: 640px) {
     .mt-editor {
-        padding: 0;               /* 去掉外框留白，直接贴边 */
+        /* 移动端进一步收紧 padding，把更多空间留给表单本身 */
+        padding: 3vh 10px 10vh 10px;
     }
     .mt-editor-inner {
-        width: 100%;              /* 撑满宽度 */
-        min-height: 100vh;        /* 撑满整屏高度 */
-        margin: 0;                /* 去掉 auto 居中 */
-        border-radius: 0;         /* 去掉圆角，更沉浸 */
-        border-left: none;
-        border-right: none;
-        padding: 16px;
+        /* 移动端稍微减小内边距，让内容区域更大 */
+        padding: 14px;
+        border-radius: 8px;
+        /* 去掉 margin-top，让弹窗在紧凑屏幕上更靠上，显示更多内容 */
+        margin-top: 0;
+    }
+    .mt-editor-inner label {
+        margin-top: 8px;
+        margin-bottom: 3px;
+        font-size: 0.8em;
+    }
+    .mt-editor-inner input,
+    .mt-editor-inner textarea {
+        padding: 6px 8px;
+        font-size: 16px; /* 防止 iOS 缩放 */
+    }
+    .mt-editor-inner textarea {
+        /* 移动端默认给一个较小但够用的高度，避免 textarea 过高挤占其他字段 */
+        min-height: 100px;
+    }
+    .mt-editor-row {
+        gap: 8px;
+    }
+    .mt-editor-actions {
+        margin-top: 12px;
+        gap: 6px;
+    }
+    .mt-editor-actions .menu_button {
+        padding: 6px 14px;
+        font-size: 0.9em;
     }
 }

@@ -17,9 +17,10 @@
     left: 50%;
     transform: translateX(-50%);
     width: min(680px, 92vw);
-    max-height: 88vh;
-    /* 修复 iOS：显式声明高度上限的计算方式，配合 min-height:0 的子元素 */
+    /* 修复 iOS 滚动问题：固定高度替代 max-height，
+       确保 flex 布局有确定尺寸，子元素才能正确计算可滚动区域 */
     height: 88vh;
+    max-height: 88vh;
     background: var(--SmartThemeBlurTintColor, #1e1e1e);
     color: var(--SmartThemeBodyColor, #eee);
     border: 1px solid var(--SmartThemeBorderColor, #555);
@@ -71,19 +72,25 @@
     flex: 0 0 140px;
 }
 
-/* 关键修复 ①：列表区域必须能正确收缩并在内部滚动。
-   iOS Safari 的 flex 子元素默认 min-height:auto，不设置 min-height:0
-   时 overflow 滚动会失效、内容溢出面板。 */
 .mt-list {
+    /* ===== 修复核心区域 ===== */
+    /* 关键修复：flex 子项默认 min-height: auto（等于内容高度），
+       iOS Safari 严格执行此规则导致列表无法收缩、超出内容被裁掉。
+       必须显式设为 0 才能让 overflow-y 生效 */
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch; /* iOS 惯性滚动 */
-    overscroll-behavior: contain;
+    overscroll-behavior: contain;      /* 防止滚动穿透到背景页面 */
+    touch-action: pan-y;               /* 明确声明只允许垂直平移手势 */
+    /* ====================== */
     padding: 10px 14px;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    /* 开启 GPU 合成层，避免 iOS 上长列表渲染时的闪烁/内容丢失 */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 .mt-item {
@@ -199,140 +206,18 @@
     margin-top: 16px;
 }
 
-/* ========== 关键修复 ②：分类折叠动画 ========== */
-.mt-group { margin-bottom: 10px; }
-.mt-group-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 12px; background: rgba(120,120,120,0.15);
-    cursor: pointer; user-select: none; font-weight: 600;
-    transition: background 0.2s;
-    border-radius: 8px;
-    position: relative;
-    -webkit-tap-highlight-color: transparent; /* 去掉 iOS 点击高亮闪烁 */
-}
-.mt-group-header:hover { background: rgba(120,120,120,0.25); }
-.mt-group-header .mt-group-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.mt-group-header .mt-group-count {
-    font-size: 0.8em; opacity: 0.6; font-weight: 400;
-}
-.mt-group-header .mt-group-arrow {
-    transition: transform 0.2s ease; font-size: 0.9em;
-}
-.mt-group.collapsed .mt-group-arrow { transform: rotate(-90deg); }
-
-/* 展开状态：完全不限制高度。
-   原实现用 max-height: 5000px 做动画，iOS 上一个分类条目稍多
-   （约 15 条以上）就会被这个上限裁切，且被裁掉的部分
-   不会撑开外层滚动区域，表现为"点了展不开、滑不下去"。
-   现在展开时不设任何上限，内容由 .mt-list 统一滚动。 */
-.mt-group-items {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    overflow: hidden;
-    padding: 8px 4px;
-    opacity: 1;
-    max-height: none;
-}
-
-/* 折叠状态：max-height 收缩到 0，过渡动画只作用在折叠方向，
-   展开是瞬间完成的——用一点动画换取 iOS 上的绝对可靠性 */
-.mt-group.collapsed .mt-group-items {
-    max-height: 0;
-    opacity: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    gap: 0;
-    transition: max-height 0.25s ease, opacity 0.2s ease,
-                padding 0.25s ease, gap 0.25s ease;
-}
-
-/* 批量复选框 */
-.mt-item { display: block; }
-.mt-item.batch-mode { display: flex; gap: 8px; align-items: flex-start; }
-.mt-item-check {
-    display: none;
-    flex-shrink: 0;
-    margin-top: 4px;
-    cursor: pointer;
-}
-.mt-item.batch-mode .mt-item-check { display: block; }
-.mt-item-check input {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-}
-
-/* 标签样式 */
-.mt-tag {
-    display: inline-block;
-    background: rgba(120, 120, 120, 0.12);
-    color: rgba(80, 80, 80, 0.85);
-    font-size: 0.82em;
-    padding: 2px 10px;
-    border-radius: 999px;
-    line-height: 1.4;
-    white-space: nowrap;
-    transition: background 0.2s, color 0.2s;
-}
-.mt-tag:hover {
-    background: rgba(120, 120, 120, 0.22);
-    color: rgba(60, 60, 60, 0.95);
-}
-.mt-item-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 4px;
-    margin-bottom: 2px;
-}
-
-/* 收藏按钮 */
-.mt-item-title-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-}
-.mt-item-title-row strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.mt-favorite-btn {
-    background: none;
-    border: none;
-    padding: 2px 4px;
-    cursor: pointer;
-    color: rgba(180, 180, 180, 0.6);
-    font-size: 0.95em;
-    transition: color 0.2s, transform 0.15s;
-    line-height: 1;
-    flex-shrink: 0;
-}
-.mt-favorite-btn:hover {
-    color: rgba(230, 180, 60, 0.8);
-    transform: scale(1.15);
-}
-.mt-favorite-btn.active {
-    color: #e6a817;
-}
-.mt-favorite-btn.active:hover {
-    color: #d49a15;
-}
-
 /* ========== 移动端专项优化 ========== */
 @media (max-width: 640px) {
-    /* 移动端面板几乎占满全屏，给面板一个更确定的高度，
-       进一步规避 iOS 上 vh/flex 组合的计算差异 */
+    /* 面板同样给固定高度，确保移动端 iOS 也正常 */
     .mt-panel {
-        top: 2%;
-        height: 96vh;
-        max-height: 96vh;
+        height: 88vh;
+        max-height: 88vh;
+        top: 5%;
+    }
+    .mt-list {
+        /* 移动端再强调一次，防止被其他规则覆盖 */
+        flex: 1 1 auto;
+        min-height: 0;
     }
     .mt-editor {
         padding: 3vh 10px 10vh 10px;
@@ -350,7 +235,7 @@
     .mt-editor-inner input,
     .mt-editor-inner textarea {
         padding: 6px 8px;
-        font-size: 16px; /* 防止 iOS 聚焦缩放 */
+        font-size: 16px; /* 防止 iOS 缩放 */
     }
     .mt-editor-inner textarea {
         min-height: 100px;

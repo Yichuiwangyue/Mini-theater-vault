@@ -184,6 +184,7 @@ function injectStyles() {
             transition: background 0.2s;
             border-radius: 8px;
             position: relative;
+            -webkit-tap-highlight-color: transparent;
         }
         .mt-group-header:hover { background: rgba(120,120,120,0.25); }
         .mt-group-header .mt-group-title {
@@ -199,22 +200,32 @@ function injectStyles() {
         }
         .mt-group.collapsed .mt-group-arrow { transform: rotate(-90deg); }
 
+        /* ========== 关键修复（iOS）：分类折叠 ==========
+           展开状态完全不设高度上限、不做 max-height 过渡。
+           旧实现 max-height: 5000px 会在 iOS Safari 上裁掉超出部分，
+           且被裁内容不会撑开外层 .mt-list 滚动区域，
+           表现为"超过约 15 条就点不开、滑不出来"。
+           现在展开内容无上限，由 .mt-list 统一滚动。 */
         .mt-group-items {
             display: flex;
             flex-direction: column;
             gap: 8px;
-            max-height: 5000px;
             overflow: hidden;
-            transition: max-height 0.35s ease-out, opacity 0.3s ease, padding 0.3s ease, gap 0.35s ease;
-            opacity: 1;
             padding: 8px 4px;
+            opacity: 1;
+            max-height: none;
         }
+
+        /* 折叠状态：收缩到 0，动画只作用在折叠方向，
+           展开是瞬间完成的——用一点动画换取 iOS 上的绝对可靠性 */
         .mt-group.collapsed .mt-group-items {
             max-height: 0;
             opacity: 0;
             padding-top: 0;
             padding-bottom: 0;
             gap: 0;
+            transition: max-height 0.25s ease, opacity 0.2s ease,
+                        padding 0.25s ease, gap 0.25s ease;
         }
 
         /* 批量复选框 */
@@ -303,7 +314,7 @@ function panelHtml() {
         <div class="mt-header">
             <span class="mt-title"><i class="fa-solid fa-masks-theater"></i> 小剧场收藏夹</span>
             <div class="mt-header-btns">
-                <button id="mt_batch" class="menu_button" title="批量选择"><i class="fa-solid fa-list-check"></i></button>
+                <button id="mt_batch" class="menu_button" title="批量选择"><i class="fa-solid fa-list-group-check"></i></button>
                 <button id="mt_add" class="menu_button" title="新增小剧场"><i class="fa-solid fa-plus"></i></button>
                 <button id="mt_export" class="menu_button" title="导出备份 JSON"><i class="fa-solid fa-download"></i></button>
                 <button id="mt_import" class="menu_button" title="导入备份 JSON"><i class="fa-solid fa-upload"></i></button>
